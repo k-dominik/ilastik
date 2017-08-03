@@ -29,9 +29,6 @@ import logging
 logger = logging.getLogger(__name__)
 
 
-RAW_DATA_ROLE_INDEX = 0
-
-
 class LoadClassifierPixelClassificationWorkflow(Workflow):
     """
     Simple workflow for converting data between formats.
@@ -56,6 +53,15 @@ class LoadClassifierPixelClassificationWorkflow(Workflow):
               or (2) cd into your project file's directory before launching ilastik.
 
     """
+    workflowName = "Pixel Classification with a pre-trained classifier."
+    workflowDescription = "This is obviously self-explanatory."
+    defaultAppletIndex = 0  # show DataSelection by default
+
+    DATA_ROLE_RAW = 0
+    DATA_ROLE_PREDICTION_MASK = 1
+    ROLE_NAMES = ['Raw Data', 'Prediction Mask']
+    EXPORT_NAMES = ['Probabilities', 'Simple Segmentation', 'Uncertainty', 'Features', 'Labels']
+
     def __init__(self, shell, headless, workflow_cmdline_args, project_creation_args, *args, **kwargs):
 
         # Create a graph to be shared by all operators
@@ -150,9 +156,9 @@ class LoadClassifierPixelClassificationWorkflow(Workflow):
         # Now connect the operators together for this lane.
         # Most workflows would have more to do here, but this workflow is super simple:
         # We just connect input to export
-        opDataExportView.RawDatasetInfo.connect(opDataSelectionView.DatasetGroup[RAW_DATA_ROLE_INDEX])
+        opDataExportView.RawDatasetInfo.connect(opDataSelectionView.DatasetGroup[self.DATA_ROLE_RAW])
         opDataExportView.Inputs.resize(1)
-        opDataExportView.Inputs[RAW_DATA_ROLE_INDEX].connect(opDataSelectionView.ImageGroup[RAW_DATA_ROLE_INDEX])
+        opDataExportView.Inputs[self.DATA_ROLE_RAW].connect(opDataSelectionView.ImageGroup[self.DATA_ROLE_RAW])
 
         # There is no special "raw" display layer in this workflow.
         # opDataExportView.RawData.connect( opDataSelectionView.ImageGroup[0] )
