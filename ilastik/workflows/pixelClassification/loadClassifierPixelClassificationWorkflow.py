@@ -32,7 +32,7 @@ logger = logging.getLogger(__name__)
 RAW_DATA_ROLE_INDEX = 0
 
 
-class DataConversionWorkflow(Workflow):
+class LoadClassifierPixelClassificationWorkflow(Workflow):
     """
     Simple workflow for converting data between formats.
     Has only two 'interactive' applets (Data Selection and Data Export), plus the BatchProcessing applet.
@@ -43,7 +43,7 @@ class DataConversionWorkflow(Workflow):
 
         python ilastik.py --headless
                           --new_project=NewTemporaryProject.ilp
-                          --workflow=DataConversionWorkflow
+                          --workflow=LoadClassifierPixelClassificationWorkflow
                           --output_format="png sequence"
                           ~/input1.h5
                           ~/input2.h5
@@ -60,7 +60,7 @@ class DataConversionWorkflow(Workflow):
 
         # Create a graph to be shared by all operators
         graph = Graph()
-        super(DataConversionWorkflow, self).__init__(
+        super(LoadClassifierPixelClassificationWorkflow, self).__init__(
             shell, headless, workflow_cmdline_args, project_creation_args, graph=graph, *args, **kwargs)
         self._applets = []
 

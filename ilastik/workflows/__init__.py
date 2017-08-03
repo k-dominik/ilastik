@@ -108,3 +108,4 @@ if ilastik.config.cfg.getboolean('ilastik', 'debug'):
     import examples.deviationFromMean
     import examples.labeling
     import examples.connectedComponents
+    import pixelClassification.loadClassifierPixelClassificationWorkflow
