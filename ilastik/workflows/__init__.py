@@ -1,3 +1,4 @@
+
 from __future__ import absolute_import
 ###############################################################################
 #   ilastik: interactive learning and segmentation toolkit
@@ -103,3 +104,4 @@ if ilastik.config.cfg.getboolean('ilastik', 'debug'):
     from .examples import deviationFromMean
     from .examples import labeling
     from .examples import connectedComponents
+    import pixelClassification.loadClassifierPixelClassificationWorkflow
