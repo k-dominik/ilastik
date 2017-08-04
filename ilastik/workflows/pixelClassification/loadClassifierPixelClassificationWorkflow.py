@@ -54,7 +54,7 @@ class LoadClassifierPixelClassificationWorkflow(Workflow):
 
     """
     workflowName = "Pixel Classification with a pre-trained classifier."
-    workflowDescription = "This is obviously self-explanatory."
+    workflowDescription = "Use a pretrained classifier with your data."
     defaultAppletIndex = 0  # show DataSelection by default
 
     DATA_ROLE_RAW = 0
@@ -71,10 +71,11 @@ class LoadClassifierPixelClassificationWorkflow(Workflow):
         self._applets = []
 
         # Instantiate DataSelection applet
-        self.dataSelectionApplet = DataSelectionApplet(self,
-                                                       "Input Data",
-                                                       "Input Data",
-                                                       supportIlastik05Import=True)
+        self.dataSelectionApplet = DataSelectionApplet(
+            workflow=self,
+            title="Input Data",
+            projectFileGroupName="Input Data",
+            supportIlastik05Import=True)
 
         # Configure global DataSelection settings
         role_names = ["Input Data"]
@@ -82,7 +83,7 @@ class LoadClassifierPixelClassificationWorkflow(Workflow):
         opDataSelection.DatasetRoles.setValue(role_names)
 
         # Instantiate DataExport applet
-        self.dataExportApplet = DataExportApplet(self, "Data Export")
+        self.dataExportApplet = DataExportApplet(workflow=self, title="Data Export")
 
         # Configure global DataExport settings
         opDataExport = self.dataExportApplet.topLevelOperator
@@ -99,10 +100,10 @@ class LoadClassifierPixelClassificationWorkflow(Workflow):
 
         # Instantiate BatchProcessing applet
         self.batchProcessingApplet = BatchProcessingApplet(
-            self,
-            "Batch Processing",
-            self.dataSelectionApplet,
-            self.dataExportApplet)
+            workflow=self,
+            title="Batch Processing",
+            dataSelectionApplet=self.dataSelectionApplet,
+            dataExportApplet=self.dataExportApplet)
 
         # Expose our applets in a list (for the shell to use)
         self._applets.append(self.dataSelectionApplet)
