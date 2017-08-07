@@ -24,6 +24,7 @@ from ilastik.workflow import Workflow
 from ilastik.applets.dataSelection import DataSelectionApplet
 from ilastik.applets.dataExport.dataExportApplet import DataExportApplet
 from ilastik.applets.batchProcessing import BatchProcessingApplet
+from ilastik.applets.pixelClassification.loadClassifierPCApplet import LoadClassifierPixelClassificationApplet
 
 import logging
 logger = logging.getLogger(__name__)
@@ -60,7 +61,8 @@ class LoadClassifierPixelClassificationWorkflow(Workflow):
     DATA_ROLE_RAW = 0
     DATA_ROLE_PREDICTION_MASK = 1
     ROLE_NAMES = ['Raw Data', 'Prediction Mask']
-    EXPORT_NAMES = ['Probabilities', 'Simple Segmentation', 'Uncertainty', 'Features', 'Labels']
+    EXPORT_NAMES = ['Processed']
+    # EXPORT_NAMES = ['Probabilities', 'Simple Segmentation', 'Uncertainty', 'Features', 'Labels']
 
     def __init__(self, shell, headless, workflow_cmdline_args, project_creation_args, *args, **kwargs):
 
@@ -81,6 +83,12 @@ class LoadClassifierPixelClassificationWorkflow(Workflow):
         role_names = ["Input Data"]
         opDataSelection = self.dataSelectionApplet.topLevelOperator
         opDataSelection.DatasetRoles.setValue(role_names)
+
+        self.processingApplet = LoadClassifierPixelClassificationApplet(
+            workflow=self,
+            guiName='Load Pre-trained Classifier',
+            projectFileGroupName='Load Classifier',
+        )
 
         # Instantiate DataExport applet
         self.dataExportApplet = DataExportApplet(workflow=self, title="Data Export")
@@ -107,6 +115,7 @@ class LoadClassifierPixelClassificationWorkflow(Workflow):
 
         # Expose our applets in a list (for the shell to use)
         self._applets.append(self.dataSelectionApplet)
+        self._applets.append(self.processingApplet)
         self._applets.append(self.dataExportApplet)
         self._applets.append(self.batchProcessingApplet)
 
@@ -153,13 +162,21 @@ class LoadClassifierPixelClassificationWorkflow(Workflow):
         # Get a *view* of each top-level operator, specific to the current lane.
         opDataSelectionView = self.dataSelectionApplet.topLevelOperator.getLane(laneIndex)
         opDataExportView = self.dataExportApplet.topLevelOperator.getLane(laneIndex)
+        opProcessingView = self.processingApplet.topLevelOperator.getLane(laneIndex)
 
         # Now connect the operators together for this lane.
-        # Most workflows would have more to do here, but this workflow is super simple:
-        # We just connect input to export
+
+        # InputImage -> processing operator
+        opProcessingView.InputImage.connect(opDataSelectionView.Image)
+
+        # ProcessedImage -> export operator
+        opDataExportView.RawData.connect(opDataSelectionView.ImageGroup[self.DATA_ROLE_RAW])
         opDataExportView.RawDatasetInfo.connect(opDataSelectionView.DatasetGroup[self.DATA_ROLE_RAW])
-        opDataExportView.Inputs.resize(1)
-        opDataExportView.Inputs[self.DATA_ROLE_RAW].connect(opDataSelectionView.ImageGroup[self.DATA_ROLE_RAW])
+        opDataExportView.Inputs.resize(len(self.EXPORT_NAMES))
+        opDataExportView.Inputs[0].connect(opProcessingView.Output)
+
+        for slot in opDataExportView.Inputs:
+            assert slot.partner is not None
 
         # There is no special "raw" display layer in this workflow.
         # opDataExportView.RawData.connect( opDataSelectionView.ImageGroup[0] )
@@ -212,6 +229,7 @@ class LoadClassifierPixelClassificationWorkflow(Workflow):
         #  should prevent the shell from closing the project.
         busy = False
         busy |= self.dataSelectionApplet.busy
+        busy |= self.processingApplet.busy
         busy |= self.dataExportApplet.busy
         busy |= self.batchProcessingApplet.busy
         self._shell.enableProjectChanges(not busy)

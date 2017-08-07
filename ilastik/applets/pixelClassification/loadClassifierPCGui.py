@@ -18,3 +18,27 @@
 # on the ilastik web site at:
 #          http://ilastik.org/license.html
 ###############################################################################
+from ilastik.applets.layerViewer.layerViewerGui import LayerViewerGui
+
+
+class LoadClassifierPixelClassificationGui(LayerViewerGui):
+    def __init__(self, *args, **kwargs):
+        """
+        from LayerViewerGui:
+            Constructor.  **All** slots of the provided *topLevelOperatorView*
+            will be monitored for changes.
+            Changes include slot resize events, and slot ready/unready status
+            changes.
+            When a change is detected, the `setupLayers()` function is called,
+            and the result is used to update the list of layers shown in the
+            central widget.
+
+            :param topLevelOperatorView: The top-level operator for the applet
+              this GUI belongs to.
+            :param additionalMonitoredSlots: Optional.  Can be used to add
+              additional slots to the set of viewable layers (all slots from the
+              top-level operator are already monitored).
+            :param centralWidgetOnly: If True, provide only a central widget
+              without drawer or viewer controls.
+        """
+        super(LoadClassifierPixelClassificationGui, self).__init__(*args, **kwargs)
