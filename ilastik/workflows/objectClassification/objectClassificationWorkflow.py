@@ -133,7 +133,7 @@ class ObjectClassificationWorkflow(Workflow):
         
         opDataExport = self.dataExportApplet.topLevelOperator
         opDataExport.WorkingDirectory.connect( self.dataSelectionApplet.topLevelOperator.WorkingDirectory )
-        
+
         # See EXPORT_SELECTION_PREDICTIONS and EXPORT_SELECTION_PROBABILITIES, above
         export_selection_names = ['Object Predictions',
                                   'Object Probabilities',
@@ -142,54 +142,34 @@ class ObjectClassificationWorkflow(Workflow):
         if self.input_types == 'raw':
             # Re-configure to add the pixel probabilities option
             # See EXPORT_SELECTION_PIXEL_PROBABILITIES, above
-            export_selection_names.append( 'Pixel Probabilities' )
-        opDataExport.SelectionNames.setValue( export_selection_names )
+            export_selection_names.append('Pixel Probabilities')
+        opDataExport.SelectionNames.setValue(export_selection_names)
 
         self._batch_export_args = None
         self._batch_input_args = None
         self._export_args = None
         self.batchProcessingApplet = None
         if self.batch:
-            self.batchProcessingApplet = BatchProcessingApplet(self, 
-                                                               "Batch Processing", 
-                                                               self.dataSelectionApplet, 
-                                                               self.dataExportApplet)
-    
+            self.batchProcessingApplet = BatchProcessingApplet(
+                workflow=self,
+                title="Batch Processing",
+                dataSelectionApplet=self.dataSelectionApplet,
+                dataExportApplet=self.dataExportApplet)
+
             if unused_args:
                 # Additional export args (specific to the object classification workflow)
                 export_arg_parser = argparse.ArgumentParser()
-                export_arg_parser.add_argument( "--table_filename", help="The location to export the object feature/prediction CSV file.", required=False )
-                export_arg_parser.add_argument( "--export_object_prediction_img", action="store_true" )
-                export_arg_parser.add_argument( "--export_object_probability_img", action="store_true" )
-                export_arg_parser.add_argument( "--export_pixel_probability_img", action="store_true" )
-                
-                # TODO: Support this, too, someday?
-                #export_arg_parser.add_argument( "--export_object_label_img", action="store_true" )
-                
-                    
+                export_arg_parser.add_argument(
+                    "--table_filename",
+                    help="The location to export the object feature/prediction CSV file.",
+                    required=False)
+
                 self._export_args, unused_args = export_arg_parser.parse_known_args(unused_args)
-                if self.input_types != 'raw' and self._export_args.export_pixel_probability_img:
-                    raise RuntimeError("Invalid command-line argument: \n"\
-                                       "--export_pixel_probability_img' can only be used with the combined "\
-                                       "'Pixel Classification + Object Classification' workflow.")
 
-                if sum([self._export_args.export_object_prediction_img,
-                        self._export_args.export_object_probability_img,
-                        self._export_args.export_pixel_probability_img]) > 1:
-                    raise RuntimeError("Invalid command-line arguments: Only one type classification output can be exported at a time.")
-
-                # We parse the export setting args first.  All remaining args are considered input files by the input applet.
-                self._batch_export_args, unused_args = self.dataExportApplet.parse_known_cmdline_args( unused_args )
-                self._batch_input_args, unused_args = self.batchProcessingApplet.parse_known_cmdline_args( unused_args )
-
-                # For backwards compatibility, translate these special args into the standard syntax
-                if self._export_args.export_object_prediction_img:
-                    self._batch_input_args.export_source = "Object Predictions"
-                if self._export_args.export_object_probability_img:
-                    self._batch_input_args.export_source = "Object Probabilities"
-                if self._export_args.export_pixel_probability_img:
-                    self._batch_input_args.export_source = "Pixel Probabilities"
-
+                # We parse the export setting args first.
+                # All remaining args are considered input files by the input applet.
+                self._batch_export_args, unused_args = self.dataExportApplet.parse_known_cmdline_args(unused_args)
+                self._batch_input_args, unused_args = self.batchProcessingApplet.parse_known_cmdline_args(unused_args)
 
         self.blockwiseObjectClassificationApplet = BlockwiseObjectClassificationApplet(
             self, "Blockwise Object Classification", "Blockwise Object Classification")
