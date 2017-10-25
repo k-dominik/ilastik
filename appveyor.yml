@@ -15,10 +15,15 @@ install:
   - set DEV_PREFIX=%MINICONDA%/envs/%ENV_NAME%
   - "set PATH=%MINICONDA%;%MINICONDA%\\Scripts;%PATH%"
   - ps: >-
+      echo $env:DEV_PREFIX
+      echo Test-Path $env:DEV_PREFIX
       If (!(Test-Path $env:DEV_PREFIX)) {
         conda config --set always_yes yes --set changeps1 no
         conda update -q conda
         conda create -q --yes -n $env:ENV_NAME -c ilastik-forge -c conda-forge python=3.6 numpy=1.12 ilastik-dependencies-no-solvers
+      }
+      else {
+        echo "Using cached conda stuff"
       }
   - activate %ENV_NAME%
   - cd \
