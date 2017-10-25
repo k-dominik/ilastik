@@ -33,6 +33,7 @@ import tempfile
 
 import ilastik
 from ilastik.workflow import getAvailableWorkflows
+from tests.helpers import ShellGuiTestCaseBase
 
 import logging
 logger = logging.getLogger(__name__)
@@ -47,3 +48,49 @@ class TestHeadlessWorkflowStartup(object):
     @classmethod
     def tearDownClass(cls):
         shutil.rmtree(cls.temp_dir)
+
+
+class TestGui(ShellGuiTestCaseBase):
+    """"""
+    @classmethod
+    def workflowClass(cls):
+        return PixelClassificationWorkflow
+
+    @classmethod
+    def setupClass(cls):
+        # Base class first
+        super().setupClass()
+        cls.temp_dir = tempfile.mkdtemp()
+        cls.project_file = os.path.join(cls.temp_dir, 'test_project.ilp')
+
+        # Start the timer
+        cls.timer = Timer()
+        cls.timer.unpause()
+
+    @classmethod
+    def teardownClass(cls):
+        cls.timer.pause()
+        logger.debug( "Total Time: {} seconds".format( cls.timer.seconds() ) )
+
+        # Call our base class so the app quits!
+        super().teardownClass()
+
+        # Clean up: Delete any test files we generated
+        shutil.rmtree(cls.temp_dir)
+
+    def test_1_NewProject(self):
+        """Create a blank project and save it."""
+        def impl():
+            projFilePath = self.PROJECT_FILE
+
+            shell = self.shell
+
+            # New project
+            shell.createAndLoadNewProject(projFilePath, self.workflowClass())
+
+            # Save and close
+            shell.projectManager.saveProject()
+            shell.ensureNoCurrentProject(assertClean=True)
+
+        # Run this test from within the shell event loop
+        self.exec_in_shell(impl)
