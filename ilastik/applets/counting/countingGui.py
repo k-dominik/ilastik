@@ -55,11 +55,6 @@ from ilastik.applets.counting.countingGuiDotsInterface import DotCrosshairContro
 from ilastik.applets.base.appletSerializer import SerialListSlot
 
 
-try:
-    from volumina.view.volumeRendering import RenderingManager
-except:
-    pass
-
 # Loggers
 logger = logging.getLogger(__name__)
 traceLogger = logging.getLogger('TRACE.' + __name__)
@@ -132,8 +127,8 @@ class CountingGui(LabelingGui):
         labelSlots = LabelingGui.LabelingSlots()
         labelSlots.labelInput = topLevelOperatorView.LabelInputs
         labelSlots.labelOutput = topLevelOperatorView.LabelImages
-        labelSlots.labelEraserValue = topLevelOperatorView.opLabelPipeline.opLabelArray.EraserLabelValue
-        labelSlots.labelDelete = topLevelOperatorView.opLabelPipeline.opLabelArray.DeleteLabel
+        labelSlots.labelEraserValue = topLevelOperatorView.opLabelPipeline.opLabelArray.eraser
+        labelSlots.labelDelete = topLevelOperatorView.opLabelPipeline.opLabelArray.deleteLabel
         labelSlots.maxLabelValue = topLevelOperatorView.MaxLabelValue
         labelSlots.labelNames = topLevelOperatorView.LabelNames
 
@@ -165,13 +160,6 @@ class CountingGui(LabelingGui):
         self.topLevelOperatorView.MaxLabelValue.notifyDirty( bind(self.handleLabelSelectionChange) )
 
         self.toggleInteractive(not self.topLevelOperatorView.FreezePredictions.value)
-
-        try:
-            self.render = True
-            self._renderedLayers = {} # (layer name, label number)
-            self._renderMgr = RenderingManager( self.editor.view3d )
-        except Exception as e:
-            self.render = False
 
 
         self.initCounting()
@@ -270,18 +258,15 @@ class CountingGui(LabelingGui):
 
         self.boxController.fixedBoxesChanged.connect(self._handleBoxConstraints)
         self.boxController.viewBoxesChanged.connect(self._changeViewBoxes)
-        
-        self.op.LabelPreviewer.Sigma.setValue(self.op.opTrain.Sigma.value)
-        self.op.opTrain.fixClassifier.setValue(False)
-        self.op.Density.notifyDirty(self._normalizePrediction)
 
+        self.op.LabelPreviewer.sigma.setValue(self.op.opTrain.Sigma.value)
+        self.op.opTrain.fixClassifier.setValue(False)
+
+        # TODO: check if defer makes sense here!
+        self.op.Density.notifyDirty(self._normalizePrediction, defer=True)
+        self.op.LabelImages.notifyDirty(self._normalizeLayers, defer=True)
 
         self._updateSVROptions()
-
-
-     
-
-
 
     def _connectUIParameters(self):
 
@@ -425,6 +410,7 @@ class CountingGui(LabelingGui):
     #    self.op.opTrain.UnderMult.setValue(self.labelingDrawerUi.UnderBox.value())
     def _updateC(self):
         self.op.opTrain.C.setValue(self.labelingDrawerUi.CBox.value())
+
     def _updateSigma(self):
         #if self._changedSigma:
 
@@ -434,16 +420,17 @@ class CountingGui(LabelingGui):
         #2 * the maximal value of a gaussian filter, to allow some leeway for overlapping
         self.op.opTrain.Sigma.setValue(sigma)
         self.op.opUpperBound.Sigma.setValue(sigma)
-        self.op.LabelPreviewer.Sigma.setValue(sigma)
+        self.op.LabelPreviewer.sigma.setValue(sigma)
+
         #    self._changedSigma = False
         self._normalizeLayers()
 
-    def _normalizeLayers(self):
+    def _normalizeLayers(self, *args):
         upperBound = self.op.UpperBound.value
         self.upperBound = upperBound
 
         if hasattr(self, "labelPreviewLayer"):
-            self.labelPreviewLayer.set_normalize(0,(0,upperBound))
+            self.labelPreviewLayer.set_normalize(0, (0, upperBound))
         return
 
 
@@ -452,7 +439,6 @@ class CountingGui(LabelingGui):
             self.predictionLayer.set_normalize(0,(0,self.upperBound))
         if hasattr(self, "uncertaintyLayer") and hasattr(self, "upperBound"):
             self.uncertaintyLayer.set_normalize(0,(0,self.upperBound))
-
 
     def _updateEpsilon(self):
         self.op.opTrain.Epsilon.setValue(self.labelingDrawerUi.EpsilonBox.value())
@@ -622,21 +608,6 @@ class CountingGui(LabelingGui):
             pass
 
 
-    def _setup_contexts(self, layer):
-        def callback(pos, clayer=layer):
-            name = clayer.name
-            if name in self._renderedLayers:
-                label = self._renderedLayers.pop(name)
-                self._renderMgr.removeObject(label)
-                self._update_rendering()
-            else:
-                label = self._renderMgr.addObject()
-                self._renderedLayers[clayer.name] = label
-                self._update_rendering()
-
-        if self.render:
-            layer.contexts.append( QAction('Toggle 3D rendering', None, triggered=callback) )
-
     @traceLogged(traceLogger)
     def setupLayers(self):
         """
@@ -646,25 +617,20 @@ class CountingGui(LabelingGui):
         # Base class provides the label layer.
         layers = super(CountingGui, self).setupLayers()
 
-        # Add each of the predictions
-        labels = self.labelListData
-
-
-
-        slots = { 'Prediction' : (self.op.Density, 0.5), 
-                 'LabelPreview': (self.op.LabelPreview, 1.0), 
-                 'Uncertainty' : (self.op.UncertaintyEstimate, 1.0) }
+        slots = {'Prediction': (self.op.Density, 0.5),
+                 'LabelPreview': (self.op.LabelPreview, 1.0),
+                 'Uncertainty': (self.op.UncertaintyEstimate, 1.0)}
 
         for name, (slot, opacity) in list(slots.items()):
             if slot.ready():
-                from volumina import colortables
-                layer = ColortableLayer(LazyflowSource(slot), colorTable = countingColorTable, normalize =
-                                       (0,self.upperBound))
+                layer = ColortableLayer(
+                    LazyflowSource(slot),
+                    colorTable=countingColorTable,
+                    normalize=(0, self.upperBound))
                 layer.name = name
                 layer.opacity = opacity
                 layer.visible = self.labelingDrawerUi.liveUpdateButton.isChecked()
                 layers.append(layer)
-
 
         #Set LabelPreview-layer to True
 
@@ -676,10 +642,8 @@ class CountingGui(LabelingGui):
         boxlabellayer.visibleChanged.connect(self.boxController.changeBoxesVisibility)
         boxlabellayer.opacityChanged.connect(self.boxController.changeBoxesOpacity)
 
-
         layers.append(boxlabellayer)
         self.boxlabelsrc = boxlabelsrc
-
 
         inputDataSlot = self.topLevelOperatorView.InputImages
         if inputDataSlot.ready():
@@ -718,9 +682,9 @@ class CountingGui(LabelingGui):
         """
         logger.debug("toggling interactive mode to '%r'" % checked)
 
-        if checked==True:
+        if checked:
             if not self.topLevelOperatorView.FeatureImages.ready() \
-            or self.topLevelOperatorView.FeatureImages.meta.shape==None:
+            or self.topLevelOperatorView.FeatureImages.meta.shape is None:
                 self.labelingDrawerUi.liveUpdateButton.setChecked(False)
                 mexBox=QMessageBox()
                 mexBox.setText("There are no features selected ")
@@ -745,7 +709,7 @@ class CountingGui(LabelingGui):
             self.handleShowPredictionsClicked()
 
         # If we're changing modes, enable/disable our controls and other applets accordingly
-        self.parentApplet.appletStateUpdateRequested.emit()
+        self.parentApplet.appletStateUpdateRequested()
 
 
     @traceLogged(traceLogger)
@@ -871,12 +835,12 @@ class CountingGui(LabelingGui):
 #                # First, do a regular save.
 #                # During a regular save, predictions are not saved to the project file.
 #                # (It takes too much time if the user only needs the classifier.)
-#                self.shellRequestSignal.emit( ShellRequest.RequestSave )
+#                self.shellRequestSignal(ShellRequest.RequestSave)
 #
 #                # Enable prediction storage and ask the shell to save the project again.
 #                # (This way the second save will occupy the whole progress bar.)
 #                self.predictionSerializer.predictionStorageEnabled = True
-#                self.shellRequestSignal.emit( ShellRequest.RequestSave )
+#                self.shellRequestSignal(ShellRequest.RequestSave)
 #                self.predictionSerializer.predictionStorageEnabled = False
 #
 #                # Restore original states (must use events for UI calls)
@@ -960,44 +924,6 @@ class CountingGui(LabelingGui):
                                         l.pmapColor().green(),
                                         l.pmapColor().blue()),
                              self.topLevelOperatorView.PmapColors)
-
-    def _update_rendering(self):
-        if not self.render:
-            return
-        shape = self.topLevelOperatorView.InputImages.meta.shape[1:4]
-        time = self.editor._posModel.slicingPos5D[0]
-        if not self._renderMgr.ready:
-            self._renderMgr.setup(shape)
-
-        layernames = set(layer.name for layer in self.layerstack)
-        self._renderedLayers = dict((k, v) for k, v in self._renderedLayers.items()
-                                if k in layernames)
-
-        newvolume = numpy.zeros(shape, dtype=numpy.uint8)
-        for layer in self.layerstack:
-            try:
-                label = self._renderedLayers[layer.name]
-            except KeyError:
-                continue
-            for ds in layer.datasources:
-                vol = ds.dataSlot.value[time, ..., 0]
-                indices = numpy.where(vol != 0)
-                newvolume[indices] = label
-
-        self._renderMgr.volume = newvolume
-        self._update_colors()
-        self._renderMgr.update()
-
-    def _update_colors(self):
-        for layer in self.layerstack:
-            try:
-                label = self._renderedLayers[layer.name]
-            except KeyError:
-                continue
-            color = layer.tintColor
-            color = (color.red(), color.green() , color.blue() )
-            self._renderMgr.setColor(label, color)
-
 
 
     def _gui_setNavigation(self):

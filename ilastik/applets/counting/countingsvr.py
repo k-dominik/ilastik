@@ -29,7 +29,7 @@ try:
 except:
     pass
 
-import h5py, cPickle
+import h5py, pickle
 import sys
 
 import logging
@@ -405,7 +405,7 @@ class SVR(object):
     def load(self, cachePath, targetname):
         f = h5py.File(cachePath, 'r')
         dataset = f[targetname]
-        obj = cPickle.loads(dataset[0])
+        obj = pickle.loads(dataset[0])
         f.close()
         return obj
 
@@ -636,9 +636,8 @@ class SVR(object):
 
     def writeHDF5(self, cachePath, targetname):
         f = h5py.File(cachePath)
-        str_type = h5py.special_dtype(vlen = str)
-        dataset = f.create_dataset(targetname, shape = (1,), dtype = str_type)
-        dataset[0] = cPickle.dumps(self)
+        dataset = f.create_dataset(targetname, shape = (1,), dtype=np.dtype('V13'))
+        dataset[0] = np.void(pickle.dumps(self))
         f.close()
 
     def get_params(self):

@@ -6,7 +6,7 @@ import vigra
 from lazyflow.graph import Operator, InputSlot, OutputSlot
 from lazyflow.stype import Opaque
 from lazyflow.rtype import SubRegion, List
-from lazyflow.operators import OpArrayCache
+from lazyflow.operators import OpBlockedArrayCache
 from lazyflow.roi import roiToSlice
 from ilastik.applets.objectExtraction.opObjectExtraction import OpObjectExtraction    ,\
     default_features_key, OpAdaptTimeListRoi
@@ -307,7 +307,14 @@ class OpTrackingFeatureExtraction(Operator):
 
                 self.FeatureNamesVigra.setValue(filtered_features_dict)
             else:
-                self.FeatureNamesVigra.setValue(self._default_features)
+                # Filter out the 2D-only features, which helpfully have "2D" in their plugin name
+                current_dict = self._default_features
+                for plugin in list(current_dict.keys()):
+                    if not "3D" in plugin:
+                        filtered_features_dict[plugin] = current_dict[plugin]
+
+                self.FeatureNamesVigra.setValue(filtered_features_dict)
+                # self.FeatureNamesVigra.setValue(self._default_features)
 
 class OpCachedDivisionFeatures(Operator):
     """Caches the division features computed by OpDivisionFeatures."""    
@@ -329,7 +336,7 @@ class OpCachedDivisionFeatures(Operator):
         self._opDivisionFeatures.RegionFeaturesVigra.connect(self.RegionFeaturesVigra)
 
         # Hook up the cache.
-        self._opCache = OpArrayCache(parent=self)
+        self._opCache = OpBlockedArrayCache(parent=self)
         self._opCache.name = "OpCachedDivisionFeatures._opCache"
         self._opCache.Input.connect(self._opDivisionFeatures.BlockwiseDivisionFeatures)
 
@@ -349,7 +356,7 @@ class OpCachedDivisionFeatures(Operator):
         
         # Every value in the region features output is cached separately as it's own "block"
         blockshape = (1,) * len(self._opDivisionFeatures.BlockwiseDivisionFeatures.meta.shape)
-        self._opCache.blockShape.setValue(blockshape)
+        self._opCache.BlockShape.setValue(blockshape)
 
     def setInSlot(self, slot, subindex, roi, value):
         assert slot == self.CacheInput

@@ -29,9 +29,10 @@ import ilastik.config
 from .pixelClassification import PixelClassificationWorkflow
 WORKFLOW_CLASSES += [PixelClassificationWorkflow]
 
-from .newAutocontext.newAutocontextWorkflow import AutocontextTwoStage, AutocontextThreeStage, AutocontextFourStage
+from .newAutocontext.newAutocontextWorkflow import AutocontextTwoStage
 WORKFLOW_CLASSES += [AutocontextTwoStage]
 if ilastik.config.cfg.getboolean('ilastik', 'debug'):
+    from .newAutocontext.newAutocontextWorkflow import AutocontextThreeStage, AutocontextFourStage
     WORKFLOW_CLASSES += [AutocontextThreeStage, AutocontextFourStage]
 
 try:
@@ -58,13 +59,12 @@ try:
     from .tracking.conservation.animalConservationTrackingWorkflow import AnimalConservationTrackingWorkflowFromBinary, AnimalConservationTrackingWorkflowFromPrediction
     WORKFLOW_CLASSES += [ ConservationTrackingWorkflowFromBinary, ConservationTrackingWorkflowFromPrediction,
                           AnimalConservationTrackingWorkflowFromBinary, AnimalConservationTrackingWorkflowFromPrediction ]
-    
 except ImportError as e:
     logger.warn( "Failed to import automatic tracking workflow (conservation tracking). For this workflow, see the installation"\
                  "instructions on our website ilastik.org; check dependencies: " + str(e) )
 
 try:
-    from .tracking.structured.structuredTrackingWorkflow import StructuredTrackingWorkflowFromBinary
+    from .tracking.structured.structuredTrackingWorkflow import StructuredTrackingWorkflowFromBinary, StructuredTrackingWorkflowFromPrediction
     WORKFLOW_CLASSES += [StructuredTrackingWorkflowFromBinary, StructuredTrackingWorkflowFromPrediction]    
 except ImportError as e:
     logger.warn( "Failed to import structured learning tracking workflow. For this workflow, see the installation"\
@@ -97,7 +97,6 @@ WORKFLOW_CLASSES += [DataConversionWorkflow]
 
 # Examples
 if ilastik.config.cfg.getboolean('ilastik', 'debug'):
-    from . import vigraWatershed
     from . import wsdt
     from .examples import layerViewer
     from .examples import thresholdMasking

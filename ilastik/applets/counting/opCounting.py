@@ -34,13 +34,13 @@ import vigra
 #lazyflow
 from lazyflow.graph import Operator, InputSlot, OutputSlot
 from lazyflow.operators import OpValueCache, \
-                               OpArrayCache, OpMultiArraySlicer2, \
+                               OpBlockedArrayCache, OpMultiArraySlicer2, \
                                OpPrecomputedInput, OpPixelOperator, OpMaxChannelIndicatorOperator, \
-                               OpReorderAxes
+                               OpReorderAxes, OpCompressedUserLabelArray
 from lazyflow.operators.opDenseLabelArray import OpDenseLabelArray
 
 from lazyflow.request import Request, RequestPool
-from lazyflow.roi     import roiToSlice, sliceToRoi
+from lazyflow.roi import roiToSlice, sliceToRoi, determineBlockShape
                                
 from ilastik.applets.counting.countingOperators import OpTrainCounter, OpPredictCounter, OpLabelPreviewer
 
@@ -51,13 +51,17 @@ from ilastik.utility import OpMultiLaneWrapper
 import threading
 from ilastik.applets.base.applet import DatasetConstraintError
 
+
 class OpVolumeOperator(Operator):
     name = "OpVolumeOperator"
     description = "Do Operations involving the whole volume"
-    inputSlots = [InputSlot("Input"), InputSlot("Function")]
-    outputSlots = [OutputSlot("Output")]
-    DefaultBlockSize = 128
-    blockShape = InputSlot(value = DefaultBlockSize)
+
+    Input = InputSlot()
+    Function = InputSlot()
+    Output = OutputSlot()
+
+    DefaultBlockSize = (128, 128, None)
+    blockShape = InputSlot(value=DefaultBlockSize)
 
     def setupOutputs(self):
         testInput = numpy.ones((3,3))
@@ -74,12 +78,21 @@ class OpVolumeOperator(Operator):
     def execute(self, slot, subindex, roi, result):
         with self._lock:
             if self.cache is None:
-                fullBlockShape = numpy.array([self.blockShape.value for i in self.Input.meta.shape])
-                fun = self.inputs["Function"].value
+                shape = self.Input.meta.shape
+                # self.blockshape has None in the last dimension to indicate that it should not be
+                # handled block-wise. None is replaced with the image shape in the respective axis.
+                fullBlockShape = []
+                for u, v in zip(self.blockShape.value, shape):
+                    if u is not None:
+                        fullBlockShape.append(u)
+                    else:
+                        fullBlockShape.append(v)
+                fullBlockShape = numpy.array(fullBlockShape, dtype=numpy.float64)
+
                 #data = self.inputs["Input"][:].wait()
                 #split up requests into blocks
-                shape = self.Input.meta.shape
-                numBlocks = numpy.ceil(old_div(shape,(1.0*fullBlockShape))).astype("int")
+
+                numBlocks = numpy.ceil(shape / fullBlockShape).astype("int")
                 blockCache = numpy.ndarray(shape = numpy.prod(numBlocks), dtype=self.Output.meta.dtype)
                 pool = RequestPool()
                 #blocks holds the different roi keys for each of the blocks
@@ -91,11 +104,12 @@ class OpVolumeOperator(Operator):
                     stop = numpy.min(numpy.vstack((stop, shape)), axis=0)
                     blockKey = roiToSlice(start, stop)
                     blockKeys.append(blockKey)
-                
+
+                fun = self.inputs["Function"].value
                 def predict_block(i):
                     data = self.Input[blockKeys[i]].wait()
                     blockCache[i] = fun(data)
-                    
+
                 for i,f in enumerate(blockCache):
                     req = pool.request(partial(predict_block,i))
 
@@ -111,11 +125,16 @@ class OpVolumeOperator(Operator):
             self.outputs["Output"].setDirty( slice(None) )
         self.cache = None
 
+
+# FIXME: this operator does _not_ calculate anything related to data - just
+# for a hypothetical one pixel gaussian
 class OpUpperBound(Operator):
     name = "OpUpperBound"
     description = "Calculate the upper bound of the data for correct normalization of the output"
-    inputSlots = [InputSlot("Sigma", stype = "float", value=2.0)]
-    outputSlots = [OutputSlot("UpperBound")]
+
+    Sigma = InputSlot(stype="float", value=2.0)
+
+    UpperBound = OutputSlot()
 
     def setupOutputs(self):
         self.UpperBound.meta.dtype = numpy.float32
@@ -159,16 +178,17 @@ class OpMean(Operator):
         key = roi.toSlice()
         self.Output.setDirty( key[:-1] )
 
+
 class OpBoxViewer( Operator ):
     name = "OpBoxViewer"
     description = "DummyOperator to serialize view-boxes"
 
-    inputSlots = [
-        #InputSlot("Images", level=1),
-        InputSlot("rois", level = 1, stype="list", value=[] )]
+    # Images = InputSlot(level=1),
+    rois = InputSlot(level=1, stype="list", value=[])
 
     def propagateDirty(self, slot, subindex, roi):
         pass
+
 
 class OpCounting( Operator ):
     """
@@ -237,24 +257,31 @@ class OpCounting( Operator ):
         self.BoxLabelInputs.connect( self.InputImages )
 
         # Hook up Labeling Pipeline
-        self.opLabelPipeline = OpMultiLaneWrapper( OpLabelPipeline, parent=self )
-        self.opLabelPipeline.RawImage.connect( self.InputImages )
-        self.opLabelPipeline.LabelInput.connect( self.LabelInputs )
+        self.opLabelPipeline = OpMultiLaneWrapper(
+            OpLabelPipeline,
+            parent=self,
+            broadcastingSlotNames=['DeleteLabel'],  # Labels are never deleted...
+        )
+        self.opLabelPipeline.RawImage.connect(self.InputImages)
+        self.opLabelPipeline.LabelInput.connect(self.LabelInputs)
         self.opLabelPipeline.BoxLabelInput.connect( self.BoxLabelInputs )
         self.LabelImages.connect( self.opLabelPipeline.Output )
         self.NonzeroLabelBlocks.connect( self.opLabelPipeline.nonzeroBlocks )
                 
         self.BoxLabelImages.connect( self.opLabelPipeline.BoxOutput)
 
-        self.GetFore= OpMultiLaneWrapper(OpPixelOperator,parent = self)
-        def conv(arr):
-            numpy.place(arr, arr ==2, 0)
-            return arr.astype(numpy.float)
-        self.GetFore.Function.setValue(conv)
-        self.GetFore.Input.connect(self.opLabelPipeline.Output)
+        self.opExtractForegroundLabels = OpMultiLaneWrapper(OpPixelOperator, parent=self)
 
-        self.LabelPreviewer = OpMultiLaneWrapper(OpLabelPreviewer, parent = self)
-        self.LabelPreviewer.Input.connect(self.GetFore.Output)
+        # Set background-labels (annotations) to zero...
+        def conv(arr):
+            numpy.place(arr, arr == 2, 0)
+            return arr.astype(numpy.float)
+
+        self.opExtractForegroundLabels.Function.setValue(conv)
+        self.opExtractForegroundLabels.Input.connect(self.opLabelPipeline.Output)
+
+        self.LabelPreviewer = OpMultiLaneWrapper(OpLabelPreviewer, parent=self)
+        self.LabelPreviewer.Input.connect(self.opExtractForegroundLabels.Output)
 
         self.LabelPreview.connect(self.LabelPreviewer.Output)
 
@@ -266,7 +293,7 @@ class OpCounting( Operator ):
         self.boxViewer = OpBoxViewer( parent = self, graph=self.graph )
 
         self.opTrain = OpTrainCounter( parent=self, graph=self.graph )
-        self.opTrain.inputs['ForegroundLabels'].connect( self.GetFore.Output)
+        self.opTrain.inputs['ForegroundLabels'].connect( self.opExtractForegroundLabels.Output)
         self.opTrain.inputs['BackgroundLabels'].connect( self.opLabelPipeline.Output)
         self.opTrain.inputs['Images'].connect( self.CachedFeatureImages )
         self.opTrain.inputs["nonzeroLabelBlocks"].connect( self.opLabelPipeline.nonzeroBlocks )
@@ -440,45 +467,61 @@ class OpCounting( Operator ):
                  "All input images must have the same number of channels.  "\
                  "Your new image has {} channel(s), but your other images have {} channel(s)."\
                  .format( thisLaneTaggedShape['c'], validShape['c'] ) )
-        
-        
 
-class OpLabelPipeline( Operator ):
+
+class OpLabelPipeline(Operator):
+    # Inputs:
     RawImage = InputSlot()
     LabelInput = InputSlot()
-    BoxLabelInput = InputSlot() 
+    BoxLabelInput = InputSlot()
+
+    # Initialize the delete input to -1, which means "no label".
+    # Now changing this input to a positive value will cause label deletions.
+    # (The deleteLabel input is monitored for changes.)
+    DeleteLabel = InputSlot(value=-1)
+
+    # Outputs:
     Output = OutputSlot()
     nonzeroBlocks = OutputSlot()
     MaxLabel = OutputSlot()
     BoxOutput = OutputSlot()
-    
+
     def __init__(self, *args, **kwargs):
-        super( OpLabelPipeline, self ).__init__( *args, **kwargs )        
-        self.opLabelArray = OpDenseLabelArray( parent=self )
-        self.opLabelArray.MetaInput.connect( self.RawImage )
-        self.opLabelArray.LabelSinkInput.connect( self.LabelInput )
-        self.opLabelArray.EraserLabelValue.setValue(100)
+        super(OpLabelPipeline, self).__init__(*args, **kwargs)
+        self.opLabelArray = OpCompressedUserLabelArray(parent=self)
+        self.opLabelArray.Input.connect(self.LabelInput)
+        self.opLabelArray.eraser.setValue(100)
 
-        self.opBoxArray = OpDenseLabelArray( parent = self)
-        self.opBoxArray.MetaInput.connect( self.RawImage )
-        self.opBoxArray.LabelSinkInput.connect( self.BoxLabelInput )
-        self.opBoxArray.EraserLabelValue.setValue(100)
+        self.opBoxArray = OpCompressedUserLabelArray(parent=self)
+        self.opBoxArray.Input.connect(self.BoxLabelInput)
+        self.opBoxArray.eraser.setValue(100)
 
-        # Initialize the delete input to -1, which means "no label".
-        # Now changing this input to a positive value will cause label deletions.
-        # (The deleteLabel input is monitored for changes.)
-        self.opLabelArray.DeleteLabel.setValue(-1)
+        self.opLabelArray.deleteLabel.connect(self.DeleteLabel)
 
         # Connect external outputs to their internal sources
-        self.Output.connect( self.opLabelArray.Output )
-        self.nonzeroBlocks.connect( self.opLabelArray.NonzeroBlocks )
-        self.MaxLabel.connect( self.opLabelArray.MaxLabelValue )
-        self.BoxOutput.connect( self.opBoxArray.Output )
-    
-
+        self.Output.connect(self.opLabelArray.Output)
+        self.nonzeroBlocks.connect(self.opLabelArray.nonzeroBlocks)
+        # self.MaxLabel.connect( self.opLabelArray.MaxLabelValue )
+        self.BoxOutput.connect(self.opBoxArray.Output)
 
     def setupOutputs(self):
-        pass
+        """Copied that from opPixelClassification.py
+
+        opLabelArray is OpCompressedUserLabelArray -> needs to be configured:
+          - blockShape needs to be set!
+        """
+        tagged_shape = self.RawImage.meta.getTaggedShape()
+        # labels are created for one channel (i.e. the label) and only in the
+        # current time slice, so we can set both c and t to 1
+        tagged_shape['c'] = 1
+        if 't' in tagged_shape:
+            tagged_shape['t'] = 1
+
+        # Aim for blocks with roughly the same size as in pixel classification,
+        # taking into account that counting will be 2d: 40 ** 3 = 256 ** 2
+        block_shape = determineBlockShape(list(tagged_shape.values()), 256 ** 2)
+        self.opLabelArray.blockShape.setValue(block_shape)
+        self.opBoxArray.blockShape.setValue(block_shape)
 
     def setInSlot(self, slot, subindex, roi, value):
         # Nothing to do here: All inputs that support __setitem__
@@ -490,7 +533,8 @@ class OpLabelPipeline( Operator ):
 
     def propagateDirty(self, slot, subindex, roi):
         # Our output changes when the input changed shape, not when it becomes dirty.
-        pass    
+        pass
+
 
 class OpPredictionPipelineNoCache(Operator):
     """
@@ -499,7 +543,6 @@ class OpPredictionPipelineNoCache(Operator):
     FeatureImages = InputSlot()
     MaxLabel = InputSlot()
     Classifier = InputSlot()
-    FreezePredictions = InputSlot()
     PredictionsFromDisk = InputSlot( optional=True )
     
     HeadlessPredictionProbabilities = OutputSlot() # drange is 0.0 to 1.0
@@ -543,13 +586,14 @@ class OpPredictionPipelineNoCache(Operator):
         # Our output changes when the input changed shape, not when it becomes dirty.
         pass
 
+
 class OpPredictionPipeline(OpPredictionPipelineNoCache):
     """
     This operator extends the cacheless prediction pipeline above with additional outputs for the GUI.
     (It uses caches for these outputs, and has an extra input for cached features.)
-    """        
+    """
     CachedFeatureImages = InputSlot()
-
+    FreezePredictions = InputSlot()
     PredictionProbabilities = OutputSlot()
     CachedPredictionProbabilities = OutputSlot()
     UncertaintyEstimate = OutputSlot()
@@ -566,26 +610,26 @@ class OpPredictionPipeline(OpPredictionPipelineNoCache):
         self.PredictionProbabilities.connect( self.predict.PMaps )
 
         # Prediction cache for the GUI
-        self.prediction_cache_gui = OpArrayCache( parent=self )
+        self.prediction_cache_gui = OpBlockedArrayCache( parent=self )
         self.prediction_cache_gui.name = "prediction_cache_gui"
         self.prediction_cache_gui.inputs["fixAtCurrent"].connect( self.FreezePredictions )
         self.prediction_cache_gui.inputs["Input"].connect( self.predict.PMaps )
-        self.prediction_cache_gui.blockShape.setValue(128)
-        
+        self.prediction_cache_gui.BlockShape.setValue((128, 128, None))
+
         ## Also provide each prediction channel as a separate layer (for the GUI)
         self.opUncertaintyEstimator = OpEnsembleMargin( parent=self )
         self.opUncertaintyEstimator.Input.connect( self.prediction_cache_gui.Output )
 
         ## Cache the uncertainty so we get zeros for uncomputed points
-        self.opUncertaintyCache = OpArrayCache( parent=self )
+        self.opUncertaintyCache = OpBlockedArrayCache( parent=self )
         self.opUncertaintyCache.name = "opUncertaintyCache"
-        self.opUncertaintyCache.blockShape.setValue(128)
+        self.opUncertaintyCache.BlockShape.setValue((128, 128, None))
         self.opUncertaintyCache.Input.connect( self.opUncertaintyEstimator.Output )
         self.opUncertaintyCache.fixAtCurrent.connect( self.FreezePredictions )
         self.UncertaintyEstimate.connect( self.opUncertaintyCache.Output )
-        
+
         self.meaner = OpMean(parent = self)
-        self.meaner.Input.connect(self.prediction_cache_gui.Output)
+        self.meaner.Input.connect(self.predict.PMaps)
 
         self.precomputed_predictions_gui = OpPrecomputedInput( ignore_dirty_input=False, parent=self )
         self.precomputed_predictions_gui.name = "precomputed_predictions_gui"

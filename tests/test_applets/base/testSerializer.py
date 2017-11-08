@@ -27,7 +27,6 @@ import shutil
 import tempfile
 from lazyflow.graph import Graph, Operator, InputSlot, Slot, OperatorWrapper
 from lazyflow.operators import OpCompressedUserLabelArray
-from lazyflow.operators.opArrayCache import OpArrayCache
 from lazyflow.operators.opArrayPiper import OpArrayPiper
 
 from ilastik.applets.base.appletSerializer import \
@@ -182,7 +181,7 @@ class TestSerializer(unittest.TestCase):
         #  the extra subslots are NOT removed.  Instead, they are simply disconnected.
         # Verify that the the number of ready() slots matches the number we attempted to save.
         ready_subslots = list(filter(Slot.ready, mss.slot))
-        self.assertEquals(len(ready_subslots), len(values))
+        self.assertEqual(len(ready_subslots), len(values))
 
         self.assertFalse(mss.dirty)
 

@@ -31,6 +31,7 @@ from lazyflow.request import Request, RequestLock, RequestPool
 
 from ilastik.applets.base.appletSerializer import AppletSerializer,\
     deleteIfPresent, getOrCreateGroup, SerialSlot, SerialBlockSlot, SerialDictSlot
+from ilastik.utility.commandLineProcessing import convertStringToList
 
 logger = logging.getLogger(__name__)
 
@@ -61,7 +62,8 @@ class SerialObjectFeaturesSlot(SerialSlot):
                 region_features_arr = self.slot[i]( *roi ).wait()
                 assert region_features_arr.shape == (1,)
                 region_features = region_features_arr[0]
-                roi_grp = subgroup.create_group(name=str(roi))
+                roi_string = str([[r.start for r in roi], [r.stop for r in roi]])
+                roi_grp = subgroup.create_group(name=str(roi_string))
                 logger.debug('Saving region features into group: "{}"'.format( roi_grp.name ))
                 for key, val in region_features.items():
                     plugin_group = getOrCreateGroup(roi_grp, key)
@@ -79,7 +81,10 @@ class SerialObjectFeaturesSlot(SerialSlot):
             assert int(group_name) == i, "subgroup extraction order should be numerical order!"
             for roiString, roi_grp in subgroup.items():
                 logger.debug('Loading region features from dataset: "{}"'.format( roi_grp.name ))
-                roi = eval(roiString)
+                roi = convertStringToList(roiString)
+                roi = tuple(map(tuple, roi))
+                assert len(roi) == 2
+                assert len(roi[0]) == len(roi[1])
 
                 region_features = {}
                 for key, val in roi_grp.items():
