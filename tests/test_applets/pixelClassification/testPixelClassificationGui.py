@@ -58,7 +58,7 @@ class TestPixelClassificationGui(ShellGuiTestCaseBase):
     #SAMPLE_DATA = os.path.split(__file__)[0] + '/synapse_small.npy'
 
     @classmethod
-    def setupClass(cls):
+    def setup_class(cls):
         # Base class first
         super(TestPixelClassificationGui, cls).setupClass()
         
@@ -76,7 +76,7 @@ class TestPixelClassificationGui(ShellGuiTestCaseBase):
         cls.timer.unpause()
 
     @classmethod
-    def teardownClass(cls):
+    def teardown_class(cls):
         cls.timer.pause()
         logger.debug( "Total Time: {} seconds".format( cls.timer.seconds() ) )
         
@@ -469,5 +469,5 @@ class TestPixelClassificationGui(ShellGuiTestCaseBase):
 
 
 if __name__ == "__main__":
-    from tests.helpers.shellGuiTestCaseBase import run_shell_nosetest
-    run_shell_nosetest(__file__)
+    from tests.helpers.shellGuiTestCaseBase import run_shell_nosetest, run_shell_pytest
+    run_shell_pytest(__file__)

@@ -24,6 +24,7 @@ from builtins import range
 from past.utils import old_div
 import sys
 import nose
+import pytest
 import threading
 import traceback
 import atexit
@@ -64,6 +65,27 @@ def run_shell_nosetest(filename):
 
     wait_for_main_func()
     noseThread.join()
+
+
+def run_shell_pytest(filename):
+    """
+    Launch pytests from a separate thread, and pause this thread while the test runs the GUI in it.
+    """
+    # This only works from the main thread.
+    assert threading.current_thread().getName() == "MainThread"
+
+    def run_pytest():
+        pytest.main(args=[
+            '--cov=ilastik',
+            filename
+        ])
+
+    pytestThread = threading.Thread(target=run_pytest)
+    pytestThread.start()
+
+    wait_for_main_func()
+    pytestThread.join()
+
 
 class ShellGuiTestCaseBase(object):
     """
