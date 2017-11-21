@@ -32,7 +32,7 @@ logger = logging.getLogger(__name__)
 
 class TestDataSelectionSerializer(object):
     
-    def setUp(self):
+    def setup_method(self):
         self.tmpDir = tempfile.mkdtemp()
         self.tmpFilePath = self.tmpDir + "/testDataSelection.npy"
     
@@ -44,7 +44,7 @@ class TestDataSelectionSerializer(object):
         data = numpy.indices((1,10,10,10,2)).sum(0)
         numpy.save(self.tmpFilePath, data)
         
-    def tearDown(self):
+    def teardown_method(self):
         for f in self.cleanupFiles:
             try:
                 os.remove(f)

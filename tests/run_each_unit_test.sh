@@ -74,7 +74,7 @@ do
   elif echo $f | grep -q "testPixelClassificationHeadless.py"; then
       python $f
   else
-      python $TESTS_DIR/nose_single.py --nologcapture $f
+      pytest $f
   fi
   
   RETVAL=$?

@@ -50,7 +50,7 @@ WRITE_DEBUG_IMAGES = False
 
 class TestOpBlockwiseObjectClassification(object):
     
-    def setUp(self):
+    def setup_method(self):
         self.setUpSources()
         self.setUpObjExtraction()
         self.setUpClassifier()

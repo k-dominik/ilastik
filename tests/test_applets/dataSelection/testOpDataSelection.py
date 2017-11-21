@@ -36,7 +36,7 @@ import tempfile
 class TestOpDataSelection_Basic2D(object):
 
     @classmethod
-    def setupClass(cls):
+    def setup_class(cls):
         cls.tmpdir = tempfile.mkdtemp()
         cls.imgFileNames2D = []
         cls.imgFileNames2Dc = []
@@ -141,7 +141,7 @@ class TestOpDataSelection_Basic2D(object):
         cls.projectFile.flush()
 
     @classmethod
-    def teardownClass(cls):
+    def teardown_class(cls):
         cls.projectFile.close()
         try:
             shutil.rmtree(cls.tmpdir)
@@ -350,7 +350,7 @@ class TestOpDataSelection_Basic2D(object):
 class TestOpDataSelection_Basic_native_3D(object):
     """Test related to loading file types that support 3D"""
     @classmethod
-    def setupClass(cls):
+    def setup_class(cls):
         cls.tmpdir = tempfile.mkdtemp()
         cls.imgFileNames3D = []
         cls.imgFileNames3Dc = []
@@ -422,7 +422,7 @@ class TestOpDataSelection_Basic_native_3D(object):
         cls.projectFile.flush()
 
     @classmethod
-    def teardownClass(cls):
+    def teardown_class(cls):
         cls.projectFile.close()
         try:
             shutil.rmtree(cls.tmpdir)
@@ -544,7 +544,7 @@ class TestOpDataSelection_Basic_native_3D(object):
 class TestOpDataSelection_3DStacks(object):
 
     @classmethod
-    def setupClass(cls):
+    def setup_class(cls):
         cls.tmpdir = tempfile.mkdtemp()
         cls.imgFileNameGlobs2D = []
         cls.imgFileNameGlobs2Dc = []
@@ -692,7 +692,7 @@ class TestOpDataSelection_3DStacks(object):
         cls.projectFile.flush()
 
     @classmethod
-    def teardownClass(cls):
+    def teardown_class(cls):
         cls.projectFile.close()
         try:
             shutil.rmtree(cls.tmpdir)

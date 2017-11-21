@@ -82,7 +82,7 @@ if haveGraphCut():
 
     class TestOpGraphCut(unittest.TestCase):
      
-        def setUp(self):
+        def setup_method(self):
             self.tinyVolume, self.labels = getTinyTestVolume()
      
         def testComplete(self):
@@ -112,7 +112,7 @@ if haveGraphCut():
 
     class TestOpObjectsSegment(unittest.TestCase):
         
-        def setUp(self):
+        def setup_method(self):
             self.vol, self.labels = getTestVolume()
             self.tinyVol, self.tinyLabels = getTinyTestVolume()
 

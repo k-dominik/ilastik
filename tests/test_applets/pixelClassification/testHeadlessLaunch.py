@@ -23,7 +23,7 @@ def test_headless_launch():
     
     print('looking for ilastik.py...')
     # Load the ilastik startup script as a module.
-    # Do it here in setupClass to ensure that it isn't loaded more than once.
+    # Do it here in setup_class to ensure that it isn't loaded more than once.
     ilastik_entry_file_path = os.path.join( os.path.split( os.path.realpath(ilastik.__file__) )[0], "../ilastik.py" )
     if not os.path.exists( ilastik_entry_file_path ):
         raise RuntimeError("Couldn't find ilastik.py startup script: {}".format( ilastik_entry_file_path ))

@@ -54,12 +54,12 @@ class TestConservationTrackingHeadless(object):
     EXPECTED_NUM_DIVISION_CHILDREN = 2 # Number of tracks that have their "parent" set, meaning they are children of a division
 
     @classmethod
-    def setupClass(cls):
+    def setup_class(cls):
         logger.info('starting setup...')
         cls.original_cwd = os.getcwd()
 
         # Load the ilastik startup script as a module.
-        # Do it here in setupClass to ensure that it isn't loaded more than once.
+        # Do it here in setup_class to ensure that it isn't loaded more than once.
         logger.info('looking for ilastik.py...')
         ilastik_entry_file_path = os.path.join( os.path.split( os.path.realpath(ilastik.__file__) )[0], "../ilastik.py" )
         if not os.path.exists( ilastik_entry_file_path ):
@@ -69,7 +69,7 @@ class TestConservationTrackingHeadless(object):
 
 
     @classmethod
-    def teardownClass(cls):
+    def teardown_class(cls):
         removeFiles = [cls.EXPECTED_TRACKING_RESULT_FILE, cls.EXPECTED_CSV_FILE]
 
         # Clean up: Delete any test files we generated

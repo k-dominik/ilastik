@@ -35,7 +35,7 @@ class Stdout2Log(object):
 
 
 class CommandLineHelperTests(unittest.TestCase):
-    def setUp(self):
+    def setup_method(self):
         self.parser = argparse.ArgumentParser()
 
     def test_expected_failures(self):

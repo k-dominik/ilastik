@@ -36,7 +36,7 @@ from ilastik.applets.objectExtraction.opObjectExtraction import \
 import h5py
 
 class TestWithCube(object):
-    def setUp(self):
+    def setup_method(self):
         
         self.features = {"Standard Object Features": {\
                                      "Count":{}, \

@@ -35,7 +35,7 @@ import unittest
 
 class TestOpAnisotropicGaussianSmoothing5d(unittest.TestCase):
 
-    def setUp(self):
+    def setup_method(self):
         g = Graph()
         r1 = OpReorderAxes(graph=g)
         r1.AxisOrder.setValue('tzyxc')

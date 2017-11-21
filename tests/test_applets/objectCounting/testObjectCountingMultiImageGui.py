@@ -64,9 +64,9 @@ class TestObjectCountingGuiMultiImage(ShellGuiTestCaseBase):
 
 
     @classmethod
-    def setupClass(cls):
+    def setup_class(cls):
         # Base class first
-        super(TestObjectCountingGuiMultiImage, cls).setupClass()
+        super(TestObjectCountingGuiMultiImage, cls).setup_class()
 
         if hasattr(cls, 'SAMPLE_DATA'):
             cls.using_random_data = False
@@ -83,9 +83,9 @@ class TestObjectCountingGuiMultiImage(ShellGuiTestCaseBase):
             numpy.save(cls.SAMPLE_DATA[1], data2.astype(numpy.uint8))
 
     @classmethod
-    def teardownClass(cls):
+    def teardown_class(cls):
         # Call our base class so the app quits!
-        super(TestObjectCountingGuiMultiImage, cls).teardownClass()
+        super(TestObjectCountingGuiMultiImage, cls).teardown_class()
 
         # Clean up: Delete any test files we generated
         removeFiles = [ TestObjectCountingGuiMultiImage.PROJECT_FILE ]
@@ -786,8 +786,8 @@ class TestObjectCountingGuiMultiImage(ShellGuiTestCaseBase):
 
 
 if __name__ == "__main__":
-    from tests.helpers.shellGuiTestCaseBase import run_shell_nosetest
-    run_shell_nosetest(__file__)
+    from tests.helpers.shellGuiTestCaseBase import run_shell_pytest
+    run_shell_pytest(__file__)
 
 
 

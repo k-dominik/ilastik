@@ -66,7 +66,7 @@ def emptyImage():
     return img
 
 class TestOpRelabelSegmentation(object):
-    def setUp(self):
+    def setup_method(self):
         g = Graph()
         self.op = OpRelabelSegmentation(graph=g)
 
@@ -90,7 +90,7 @@ class TestOpRelabelSegmentation(object):
 class TestOpObjectTrain(unittest.TestCase):
     
     nRandomForests = 1
-    def setUp(self):
+    def setup_method(self):
         segimg = segImage()
 
         rawimg = np.indices(segimg.shape).sum(0).astype(np.float32)
@@ -168,7 +168,7 @@ class TestOpObjectTrain(unittest.TestCase):
 
 
 class TestOpObjectPredict(unittest.TestCase):
-    def setUp(self):
+    def setup_method(self):
         segimg = segImage()
         labels = {0 : np.array([0, 1, 2]),
                   1 : np.array([0, 0, 0, 0,])}
@@ -251,7 +251,7 @@ class TestOpObjectPredict(unittest.TestCase):
 
  
 class TestFeatureSelection(unittest.TestCase):
-    def setUp(self):
+    def setup_method(self):
         segimg = segImage()
         binimg = (segimg>0).astype(np.uint8)
         labels = {0 : np.array([0, 1, 2]),
@@ -305,7 +305,7 @@ class TestFeatureSelection(unittest.TestCase):
         
 
 class TestOpBadObjectsToWarningMessage(unittest.TestCase):
-    def setUp(self):
+    def setup_method(self):
         g = Graph()
         
         self.op = OpBadObjectsToWarningMessage(graph=g)
@@ -350,7 +350,7 @@ class TestOpBadObjectsToWarningMessage(unittest.TestCase):
 
 
 class TestMaxLabel(object):
-    def setUp(self):
+    def setup_method(self):
         g = Graph()
         rawimg = np.random.randint(0, 255, (2, 10, 10, 10, 1))
         binimg = rawimg>100
@@ -396,7 +396,7 @@ class TestMaxLabel(object):
    
 
 class TestFullOperator(unittest.TestCase):
-    def setUp(self):
+    def setup_method(self):
         segimg = segImage()
         binimg = (segimg>0).astype(np.uint8)
         labels = {0 : np.array([0, 1, 2]),

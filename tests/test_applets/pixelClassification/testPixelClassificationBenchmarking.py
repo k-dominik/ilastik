@@ -56,13 +56,13 @@ class TestPixelClassificationGuiBenchmarking(ShellGuiTestCaseBase):
     #SAMPLE_DATA = os.path.split(__file__)[0] + '/synapse_small.npy'
 
     @classmethod
-    def setupClass(cls):
+    def setup_class(cls):
         # This test is useful for performance evaluation,
         #  but it takes too long to be useful as part of the normal test suite.
         raise nose.SkipTest
         
         # Base class first
-        super(TestPixelClassificationGuiBenchmarking, cls).setupClass()
+        super(TestPixelClassificationGuiBenchmarking, cls).setup_class()
         
         if hasattr(cls, 'SAMPLE_DATA'):
             cls.using_random_data = False
@@ -78,12 +78,12 @@ class TestPixelClassificationGuiBenchmarking(ShellGuiTestCaseBase):
         cls.timer.start()
 
     @classmethod
-    def teardownClass(cls):
+    def teardown_class(cls):
         cls.timer.stop()
         logger.debug( "Total Time: {} seconds".format( cls.timer.seconds() ) )
         
         # Call our base class so the app quits!
-        super(TestPixelClassificationGuiBenchmarking, cls).teardownClass()
+        super(TestPixelClassificationGuiBenchmarking, cls).teardown_class()
 
         # Clean up: Delete any test files we generated
         removeFiles = [ TestPixelClassificationGuiBenchmarking.PROJECT_FILE ]
@@ -256,5 +256,5 @@ class TestPixelClassificationGuiBenchmarking(ShellGuiTestCaseBase):
 
 
 if __name__ == "__main__":
-    from tests.helpers.shellGuiTestCaseBase import run_shell_nosetest
-    run_shell_nosetest(__file__)
+    from tests.helpers.shellGuiTestCaseBase import run_shell_pytest
+    run_shell_pytest(__file__)

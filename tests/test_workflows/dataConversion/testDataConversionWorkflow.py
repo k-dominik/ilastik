@@ -49,7 +49,7 @@ class TestDataConversionWorkflow(object):
     #SAMPLE_DATA = os.path.split(__file__)[0] + '/synapse_small.npy'
 
     @classmethod
-    def setupClass(cls):
+    def setup_class(cls):
         print('starting setup...')
 
         if hasattr(cls, 'SAMPLE_DATA'):
@@ -60,7 +60,7 @@ class TestDataConversionWorkflow(object):
 
         print('looking for ilastik.py...')
         # Load the ilastik startup script as a module.
-        # Do it here in setupClass to ensure that it isn't loaded more than once.
+        # Do it here in setup_class to ensure that it isn't loaded more than once.
         ilastik_entry_file_path = os.path.join( os.path.split( os.path.realpath(ilastik.__file__) )[0], "../ilastik.py" )
         if not os.path.exists( ilastik_entry_file_path ):
             raise RuntimeError("Couldn't find ilastik.py startup script: {}".format( ilastik_entry_file_path ))
@@ -68,7 +68,7 @@ class TestDataConversionWorkflow(object):
         cls.ilastik_startup = imp.load_source( 'ilastik_startup', ilastik_entry_file_path )
 
     @classmethod
-    def teardownClass(cls):
+    def teardown_class(cls):
         # Clean up: Delete any test files we generated
         removeFiles = [ TestDataConversionWorkflow.PROJECT_FILE ]
         if cls.using_random_data:

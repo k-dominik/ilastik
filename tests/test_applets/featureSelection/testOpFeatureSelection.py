@@ -33,7 +33,7 @@ ilastik.ilastik_logging.default_config.init()
 import tempfile
 
 class TestOpFeatureSelection(object):
-    def setUp(self):
+    def setup_method(self):
         data = numpy.random.random((2,100,100,100,3))
 
         self.filePath = tempfile.mkdtemp() + '/featureSelectionTestData.npy'
@@ -78,7 +78,7 @@ class TestOpFeatureSelection(object):
         self.opFeatures = opFeatures
         self.opReader = opReader
         
-    def tearDown(self):
+    def teardown_method(self):
         self.opFeatures.cleanUp()
         self.opReader.cleanUp()
         try:

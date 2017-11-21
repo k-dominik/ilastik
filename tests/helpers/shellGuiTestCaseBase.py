@@ -23,6 +23,7 @@ from __future__ import division
 from builtins import range
 from past.utils import old_div
 import sys
+import os
 import nose
 import pytest
 import threading
@@ -48,7 +49,7 @@ def quitApp():
     if qApp is not None:
         qApp.quit()
 
-def run_shell_nosetest(filename):
+def run_shell_pytest(filename):
     """
     Launch nosetests from a separate thread, and pause this thread while the test runs the GUI in it.
     """
@@ -76,8 +77,7 @@ def run_shell_pytest(filename):
 
     def run_pytest():
         pytest.main(args=[
-            '--cov=ilastik',
-            filename
+            filename,
         ])
 
     pytestThread = threading.Thread(target=run_pytest)
@@ -99,7 +99,7 @@ class ShellGuiTestCaseBase(object):
     mainThreadEvent = threading.Event()
 
     @classmethod
-    def setupClass(cls):
+    def setup_class(cls):
         """
         Start the shell and wait until it is finished initializing.
         """
@@ -153,7 +153,7 @@ class ShellGuiTestCaseBase(object):
         init_complete.wait()
 
     @classmethod
-    def teardownClass(cls):
+    def teardown_class(cls):
         """
         Force the shell to quit (without a save prompt), and wait for the app to exit.
         """

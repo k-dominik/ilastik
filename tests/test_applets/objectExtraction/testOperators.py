@@ -80,7 +80,7 @@ def rawImage():
 
 
 class TestOpRegionFeatures(object):
-    def setUp(self):
+    def setup_method(self):
         g = Graph()
         self.labelop = OpLabelVolume(graph=g)
         self.op = OpRegionFeatures(graph=g)
@@ -109,7 +109,7 @@ class TestOpRegionFeatures(object):
         assert np.any(feats[0][NAME]['RegionCenter'] != feats[1][NAME]['RegionCenter'])
 
 class TestPlugins(object):
-    def setUp(self):
+    def setup_method(self):
         g = Graph()
         self.op = OpObjectExtraction(graph=g)
 
@@ -135,7 +135,7 @@ class TestPlugins(object):
         feats = self.op.RegionFeatures([0]).wait()
 
 class testOpRegionFeaturesAgainstNumpy(object):
-    def setUp(self):
+    def setup_method(self):
         g = Graph()
         self.features = {
             NAME : {

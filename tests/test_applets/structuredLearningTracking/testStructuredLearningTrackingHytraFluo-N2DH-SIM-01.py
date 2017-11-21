@@ -69,12 +69,12 @@ class TestStructuredLearningTrackingHeadless(object):
     EXPECTED_FALSE_DETECTIONS_NUM = 1 # Number of false detections expected in exported csv file
 
     @classmethod
-    def setupClass(cls):
+    def setup_class(cls):
         logger.info('starting setup...')
         cls.original_cwd = os.getcwd()
 
         # Load the ilastik startup script as a module.
-        # Do it here in setupClass to ensure that it isn't loaded more than once.
+        # Do it here in setup_class to ensure that it isn't loaded more than once.
         logger.info('looking for ilastik.py...')
         ilastik_entry_file_path = os.path.join( os.path.split( os.path.realpath(ilastik.__file__) )[0], "../ilastik.py" )
         if not os.path.exists( ilastik_entry_file_path ):
@@ -84,7 +84,7 @@ class TestStructuredLearningTrackingHeadless(object):
 
 
     @classmethod
-    def teardownClass(cls):
+    def teardown_class(cls):
         removeFiles = [cls.ilastik_tests_file_path+'data/inputdata/cell_tracking_challenge_15/Fluo-N2DH-SIM/01/learningRaw-2017-01-17_Tracking-Result.h5',
                        cls.ilastik_tests_file_path+'data/inputdata/cell_tracking_challenge_15/Fluo-N2DH-SIM/01/learningRaw-2017-01-17_CSV-Table.csv']
 

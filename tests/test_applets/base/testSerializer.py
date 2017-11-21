@@ -65,7 +65,7 @@ def randArray():
 
 
 class TestHDF5HelperFunctions(unittest.TestCase):
-    def setUp(self):
+    def setup_method(self):
         self.tmpDir = tempfile.mkdtemp()
         self.tmpFile = h5py.File(os.path.join(self.tmpDir, "test.h5"), "a")
         self.tmpFile.create_group("a")
@@ -113,13 +113,13 @@ class TestHDF5HelperFunctions(unittest.TestCase):
 
         self.assertTrue("b" not in self.tmpFile)
 
-    def tearDown(self):
+    def teardown_method(self):
         self.tmpFile.close()
         shutil.rmtree(self.tmpDir)
 
 
 class TestSerializer(unittest.TestCase):
-    def setUp(self):
+    def setup_method(self):
         g = Graph()
         self.operator = OpMock(graph=g)
         self.serializer = OpMockSerializer(self.operator, "TestApplet")
@@ -128,7 +128,7 @@ class TestSerializer(unittest.TestCase):
         self.projectFile = h5py.File(self.projectFilePath)
         self.projectFile.create_dataset("ilastikVersion", data=b'1.0.0')
 
-    def tearDown(self):
+    def teardown_method(self):
         self.projectFile.close()
         shutil.rmtree(self.tmpDir)
 
@@ -283,7 +283,7 @@ class TestSerialDictSlot(unittest.TestCase):
             super(TestSerialDictSlot.SerializerForOpWithDictSlot, self).__init__(groupName, [self.ss])
         
     
-    def setUp(self):
+    def setup_method(self):
         g = Graph()
         self.operator = self.OpWithDictSlot(graph=g)
         self.serializer = self.SerializerForOpWithDictSlot(self.operator, "TestApplet")
@@ -292,7 +292,7 @@ class TestSerialDictSlot(unittest.TestCase):
         self.projectFile = h5py.File(self.projectFilePath)
         self.projectFile.create_dataset("ilastikVersion", data=b'0.6')
 
-    def tearDown(self):
+    def teardown_method(self):
         self.projectFile.close()
         shutil.rmtree(self.tmpDir)
 

@@ -26,8 +26,8 @@ import numpy
 import vigra
 from lazyflow.graph import Graph
 
-class testMissingValueHandling(object):
-    def setUp(self):
+class TestMissingValueHandling(object):
+    def setup_method(self):
         self.rawimg = numpy.random.randint(0, 256, (1, 200, 200, 1, 1))
         self.binimg = self.rawimg>100
         cc = vigra.analysis.labelImageWithBackground(self.binimg.squeeze().astype(numpy.uint8))

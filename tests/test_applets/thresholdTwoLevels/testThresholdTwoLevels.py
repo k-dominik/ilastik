@@ -76,7 +76,7 @@ class Generator1(unittest.TestCase):
 
         return clusters
 
-    def setUp(self):
+    def setup_method(self):
         self.nz = 50
         self.ny = 51
         self.nx = 52
@@ -213,8 +213,8 @@ class TestThresholdOneLevelInternal(Generator1):
 
 
 class TestThresholdOneLevel(Generator1):
-    def setUp(self):
-        super(TestThresholdOneLevel, self).setUp()
+    def setup_method(self):
+        super(TestThresholdOneLevel, self).setup_method()
         self.curOperator = 0
         self.usePreThreshold = False
 
@@ -300,8 +300,8 @@ class TestThresholdOneLevel(Generator1):
 
 # class TestObjectsSegment(TestThresholdOneLevel):
 #     @unittest.skipIf(not haveGraphCut(), "opengm not available")
-#     def setUp(self):
-#         super(TestObjectsSegment, self).setUp()
+#     def setup_method(self):
+#         super(TestObjectsSegment, self).setup_method()
 #         self.curOperator = 2
 #         self.usePreThreshold = True
 # 
@@ -318,13 +318,13 @@ class TestThresholdOneLevel(Generator1):
 
 # class TestGraphCut(TestObjectsSegment):
 #     @unittest.skipIf(not haveGraphCut(), "opengm not available")
-#     def setUp(self):
-#         super(TestGraphCut, self).setUp()
+#     def setup_method(self):
+#         super(TestGraphCut, self).setup_method()
 #         self.usePreThreshold = False
 
 
 class Generator2(Generator1):
-    def setUp(self):
+    def setup_method(self):
 
         self.nz = 50
         self.ny = 51
@@ -661,8 +661,8 @@ class TestThresholdTwoLevels(Generator2):
 
 # class TestThresholdGC(Generator2):
 # 
-#     def setUp(self):
-#         super(TestThresholdGC, self).setUp()
+#     def setup_method(self):
+#         super(TestThresholdGC, self).setup_method()
 # 
 #     def testWithout(self):
 #         oper5d = OpThresholdTwoLevels(graph=Graph())
@@ -744,7 +744,7 @@ class DirtyAssert(Operator):
 
 
 class TestTTLUseCase(unittest.TestCase):
-    def setUp(self):
+    def setup_method(self):
         # The setting:
         # We have a 3-dimensional plus sign (3 bars crossing) that wanders
         # around as time passes. The predictions are noisy. Predictions for the
