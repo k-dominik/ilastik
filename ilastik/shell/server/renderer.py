@@ -1,12 +1,15 @@
 import json
 from apistar.renderers import Renderer
 from apistar import http
-
+from datetime import datetime
+from .models import models
 import numpy
+
 
 import logging
 
 logger = logging.getLogger(__name__)
+
 
 class CustomEncoder(json.JSONEncoder):
     def default(self, obj):
@@ -18,6 +21,17 @@ class CustomEncoder(json.JSONEncoder):
             return float(obj)
         elif isinstance(obj, numpy.ndarray):
             return obj.tolist()
+        elif isinstance(obj, datetime):
+            return obj.isoformat()
+        elif isinstance(obj, models.ModelBase):
+            return json.dumps(
+                {
+                    k: v
+                    for k, v in obj.__dict__.items()
+                    if not k.startswith('_')
+                },
+                cls=self.__class__
+            )
         elif hasattr(obj, 'to_json'):
             return obj.to_json()
 

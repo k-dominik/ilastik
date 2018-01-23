@@ -2,10 +2,12 @@ from apistar.frameworks.wsgi import WSGIApp as App
 from apistar import Route, Include
 from apistar.handlers import docs_urls, static_urls
 import os
-
+from apistar.backends import sqlalchemy_backend
 from .routes import basic, data, project, workflow
 from .ilastikAPI import IlastikAPI
 from .renderer import IlastikJSONRenderer
+from .models.models import Base
+from .commands import commands as own_commands
 
 
 import logging
@@ -31,54 +33,33 @@ settings = {
     'SCHEMA': {
         'TITLE': "ilastik-API",
         'DESCRIPTION': "ilastiks http intrerface for third party applications."
+    },
+    'DATABASE': {
+        'URL': f"sqlite:///{os.path.expanduser('~/ilastik_server/db.sqlite')}",
+        'METADATA': Base.metadata,
+    },
+    'ILASTIK_CONFIG': {
+        'DATA_PATH': os.path.expanduser('~/ilastik_server/data'),
+        'PROJECTS_PATH': os.path.expanduser('~/ilastik_server/projects'),
+        'NETWORKS_PATH': os.path.expanduser('~/ilastik_server/networks'),
+    },
+    'TEMPLATES': {
+        'ROOT_DIR': 'templates',     # Include the 'templates/' directory.
+        'PACKAGE_DIRS': ['apistar']  # Include the built-in apistar templates.
     }
 }
 
 
-app = App(routes=routes, settings=settings)
+app = App(
+    routes=routes,
+    settings=settings,
+    commands=sqlalchemy_backend.commands + own_commands,
+    components=sqlalchemy_backend.components,
+
+)
 
 
-class IlastikServerConfig(object):
-    def __init__(self, *args, **kwargs):
-        super().__init__()
-        default_config = {
-            "projects_path": os.path.expanduser('~/ilastik_server/projects'),
-            "data_path": os.path.expanduser('~/ilastik_server/data')
-        }
-        default_config.update(kwargs)
-
-        self._config = default_config
-        self.setup_paths()
-
-    @property
-    def config(self):
-        return self._config
-
-    @property
-    def projects_path(self):
-        return self._config['projects_path']
-
-    @property
-    def data_path(self):
-        return self._config['data_path']
-
-    def setup_paths(self):
-        projects_path = self.projects_path
-        if not os.path.exists(projects_path):
-            os.makedirs(projects_path)
-            logger.info(f'Created project path {projects_path}')
-        logger.info(f'Using project path: {projects_path}')
-
-        data_path = self.data_path
-        if not os.path.exists(data_path):
-            os.makedirs(data_path)
-            logger.info(f'Created data path {data_path}.')
-        logger.info(f'Using data path: {data_path}')
-
-
-ilastik_server_config = IlastikServerConfig()
 ilastik_api = IlastikAPI()
-app._ilastik_config = ilastik_server_config
 app._ilastik_api = ilastik_api
 
 
