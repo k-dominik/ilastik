@@ -67,6 +67,7 @@ class NetworkRecord(Base):
     data_description = Column(String)
     # this is True, if it is in the local server storage
     is_located_relative = Column(Boolean)
+    path = Column(String)
     thumbnail = Column(String)
     last_updated = LastModifiedColumn()
 

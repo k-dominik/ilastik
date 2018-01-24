@@ -12,12 +12,6 @@ logger = logging.getLogger(__name__)
 
 
 @time_function_call(logger)
-def get_project_list(session: Session, settings: Settings) -> typing.List[dict]:
-    records = session.query(models.DatasetRecord).all()
-    return records
-
-
-@time_function_call(logger)
 def new_project(project: NewLocalProject, session: Session, settings: Settings):
     app = get_current_app()
     project_name = project['project_name']

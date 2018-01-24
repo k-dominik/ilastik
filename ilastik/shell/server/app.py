@@ -3,7 +3,7 @@ from apistar import Route, Include
 from apistar.handlers import docs_urls, static_urls
 import os
 from apistar.backends import sqlalchemy_backend
-from .routes import basic, data, project, workflow
+from .routes import basic, data, project, workflow, sites, server
 from .ilastikAPI import IlastikAPI
 from .renderer import IlastikJSONRenderer
 from .models.models import Base
@@ -22,7 +22,9 @@ routes = [
     Include('/static', static_urls),
     Include('/api/project', project.routes),
     Include('/api/data', data.routes),
-    Include('/api/workflow', workflow.routes)
+    Include('/api/workflow', workflow.routes),
+    Include('/api/server', server.routes),
+    Include('/site', sites.routes)
 ]
 
 # extend here in order to add them to site root
