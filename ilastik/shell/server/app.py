@@ -1,6 +1,7 @@
 from apistar.frameworks.wsgi import WSGIApp as App
 from apistar import Route, Include
 from apistar.handlers import docs_urls, static_urls
+from apistar.renderers import HTMLRenderer
 import os
 from apistar.backends import sqlalchemy_backend
 from .routes import basic, data, project, workflow, sites, server
@@ -31,7 +32,7 @@ routes = [
 routes.extend(basic.routes)
 
 settings = {
-    'RENDERERS': [IlastikJSONRenderer()],
+    'RENDERERS': [IlastikJSONRenderer(), HTMLRenderer()],
     'SCHEMA': {
         'TITLE': "ilastik-API",
         'DESCRIPTION': "ilastiks http intrerface for third party applications."
@@ -46,7 +47,7 @@ settings = {
         'NETWORKS_PATH': os.path.expanduser('~/ilastik_server/networks'),
     },
     'TEMPLATES': {
-        'ROOT_DIR': 'templates',     # Include the 'templates/' directory.
+        'ROOT_DIR': 'ilastik/shell/server/templates',     # Include the 'templates/' directory.
         'PACKAGE_DIRS': ['apistar']  # Include the built-in apistar templates.
     }
 }

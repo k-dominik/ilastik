@@ -1,0 +1,34 @@
+{% extends "base.html" %}
+{% block title %}Select data and a network{% endblock %}
+
+{% block content %}
+    <p class="description">
+      Select a dataset along with a network on the server to launch the viewer.
+    <div class="form-style">
+        <form method="GET" action="/site/landing" name='Projects'>
+        <div class="dataset_list">
+        <select name="data_id">
+            {% for item in dataset_list %}
+            <div class="dataset_item">
+                <option value="{{ item.id }}">
+                {{ item.path }}
+                </option>
+            </div>
+            {% endfor %}
+        </select>
+        </div>
+
+        <div class="network_list">
+            {% for item in network_list %}
+            <div class="network_item">
+                <input type="radio" name="network_id" value="{{ item.id }}">
+                {{ item.path, item.thumbnail }}
+            </div>
+            {% endfor %}
+        </div>
+        <input type="submit" value="Launch Neuroglancer">
+        </form>
+    </div>
+
+{% endblock %}
+
