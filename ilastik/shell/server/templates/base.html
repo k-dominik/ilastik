@@ -3,95 +3,14 @@
 <head>
     {% block head %}
     <!-- Move that to a separate file. -->
-    <style type="text/css">
-    body{
-        font-family: "Helvetica Neue",Helvetica,Arial,sans-serif;
-        font-size: 17px;
-        font-weight: 500;
-        line-height: 1.42857143;
-        color: #333;
-        margin:40px auto;
-        max-width:800px;
-        padding:0 10px;
-        min-width: 400px;
-    }
-    h1,h2,h3{
-        line-height:1.
-    }
-    .description{
-        color: #000;
-    }
-    .page-header{
-        border-bottom: 1px solid #eee;
-        margin: 40px 0 20px;
-    }
-    .pull-left {
-        float: left;
-    }
-    #main-logo {
-        margin-right: 15px;
-    }
-    h1 small {
-        font-weight: 400;
-        font-size: 65%;
-    }
-    h1 small {
-        color: #999;
-    }
-    .form-style{
-        max-width: 800px;
-        padding: 10px 20px;
-        background: #f4f7f8;
-        margin: 10px auto;
-        padding: 20px;
-        background: #f4f7f8;
-        border-radius: 8px;
-        font-family: Georgia, "Times New Roman", Times, serif;
-    }
-    .form-style select {
-        font-family: Georgia, "Times New Roman", Times, serif;
-        background: rgba(255,255,255,.1);
-        border: none;
-        border-radius: 4px;
-        font-size: 16px;
-        margin: 0;
-        outline: 0;
-        padding: 7px;
-        width: 100%;
-        box-sizing: border-box;
-        -webkit-box-sizing: border-box;
-        -moz-box-sizing: border-box;
-        background-color: #e8eeef;
-        color:#8a97a0;
-        -webkit-box-shadow: 0 1px 0 rgba(0,0,0,0.03) inset;
-        box-shadow: 0 1px 0 rgba(0,0,0,0.03) inset;
-        margin-bottom: 10px;
-       
-    }
-    .form-style input[type="submit"]
-    {
-        position: relative;
-        display: block;
-        padding: 19px 39px 18px 39px;
-        color: #FFF;
-        margin: 0 auto;
-        background: #1abc9c;
-        font-size: 20px;
-        text-align: center;
-        font-style: normal;
-        width: 100%;
-        border: 1px solid #16a085;
-        border-width: 1px 1px 3px;
-        margin-bottom: 10px;
-    }
-    </style>
-    <link rel="shortcut icon" type="image/x-icon" href="favicon.ico"/>
+    <link rel="stylesheet" href="/static/ilastik-style.css">
+    <link rel="shortcut icon" type="image/x-icon" href="/static/favicon.ico"/>
     <title>{% block title %}{% endblock %} - ilastik-glancer</title>
     {% endblock %}
 </head>
 <body>
     <div class="page-header">
-      <img src="/assets/ilastik-logo.png" alt="ilastik"
+      <img src="/static/ilastik-logo.png" alt="ilastik"
        class="pull-left" id="main-logo">
       <h1>ilastik  <br /> <small>the interactive learning and segmentation toolkit</small></h1>
     </div>

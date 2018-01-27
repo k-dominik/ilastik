@@ -25,7 +25,7 @@ routes = [
     Include('/api/data', data.routes),
     Include('/api/workflow', workflow.routes),
     Include('/api/server', server.routes),
-    Include('/site', sites.routes)
+    Include('/site', sites.routes),
 ]
 
 # extend here in order to add them to site root
@@ -45,6 +45,10 @@ settings = {
         'DATA_PATH': os.path.expanduser('~/ilastik_server/data'),
         'PROJECTS_PATH': os.path.expanduser('~/ilastik_server/projects'),
         'NETWORKS_PATH': os.path.expanduser('~/ilastik_server/networks'),
+    },
+    'STATICS': {
+        'ROOT_DIR': 'ilastik/shell/server/static',
+        'PACKAGE_DIRS': ['apistar']  # Include the built-in apistar static files.
     },
     'TEMPLATES': {
         'ROOT_DIR': 'ilastik/shell/server/templates',     # Include the 'templates/' directory.
