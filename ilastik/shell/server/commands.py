@@ -65,6 +65,7 @@ def scan_folder(
         base_name, extension = os.path.splitext(file)
         if extension.strip('.') in allowed_extensions:
             record = record_type(
+                alias=base_name,
                 path=os.path.join(path, file),
                 is_located_relative=True,
                 thumbnail=os.path.join(

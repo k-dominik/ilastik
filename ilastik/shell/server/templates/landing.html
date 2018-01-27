@@ -7,22 +7,19 @@
     <div class="form-style">
         <form method="GET" action="/site/landing" name='Projects'>
         <div class="dataset_list">
-        <select name="data_id">
             {% for item in dataset_list %}
             <div class="dataset_item">
-                <option value="{{ item.id }}">
-                {{ item.path }}
-                </option>
+                <input type="radio" name="dataset_id" value="{{ item.id }}">
+                {{ item.alias, item.thumbnail }}
             </div>
             {% endfor %}
-        </select>
         </div>
 
         <div class="network_list">
             {% for item in network_list %}
             <div class="network_item">
                 <input type="radio" name="network_id" value="{{ item.id }}">
-                {{ item.path, item.thumbnail }}
+                {{ item.alias, item.thumbnail }}
             </div>
             {% endfor %}
         </div>

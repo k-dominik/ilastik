@@ -64,6 +64,7 @@ class DatasetRecord(Base):
 class NetworkRecord(Base):
     __tablename__ = "Network"
     id = Column(Integer, primary_key=True)
+    alias = Column(String)
     data_description = Column(String)
     # this is True, if it is in the local server storage
     is_located_relative = Column(Boolean)
@@ -75,6 +76,7 @@ class NetworkRecord(Base):
 class ProjectRecord(Base):
     __tablename__ = "Project"
     id = Column(Integer, primary_key=True)
+    alias = Column(String)
     # this is True, if it is in the local server storage
     is_located_relative = Column(Boolean)
     # Absolute path, unless `is_located_relative`. Then relative to settings['ILASTIK_CONFIG']['']
