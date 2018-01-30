@@ -4,8 +4,6 @@ import logging
 import collections
 import copy
 
-from functools import partial
-
 import numpy
 
 from ilastik.applets.dataSelection.opDataSelection import DatasetInfo
@@ -15,10 +13,6 @@ from ilastik.applets.batchProcessing.batchProcessingApplet import BatchProcessin
 from ilastik.applets.dataSelection.dataSelectionApplet import DataSelectionApplet
 from ilastik.applets.pixelClassification import PixelClassificationApplet
 from ilastik.applets.base.applet import Applet
-
-
-from lazyflow.graph import OperatorWrapper
-from lazyflow.operators.opReorderAxes import OpReorderAxes
 
 
 logger = logging.getLogger(__name__)
