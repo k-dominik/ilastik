@@ -26,7 +26,7 @@ logger = logging.getLogger(__name__)
 class IlastikAPI(object):
     """Collection of user-friendly methods for interaction with ilastik
     """
-    def __init__(self, workflow_type=None, project_path=None):
+    def __init__(self, workflow_type: str=None, project_path: str=None):
         """Initialize a new API object
 
         If `workflow_type` is given and `project_path` is None, an in-memory
@@ -134,6 +134,23 @@ class IlastikAPI(object):
         workflow = self._server_shell.workflow
         return workflow
 
+    def get_applet(self, applet_type):
+        """
+        Args:
+            applet_type (BaseApplet or derived): the actual class one is looking
+              for.
+
+        Returns:
+            Applet
+        """
+        applets = self.applets
+        selected_applet = [applet for applet in applets
+                           if isinstance(applet, applet_type)]
+        assert len(selected_applet) == 1, (
+            "Expected only a single batch processing applet per workflow.")
+        selected_applet = selected_applet[0]
+        return selected_applet
+
     def get_applet_names(self):
         """Convenience property, get the list of applet names
 
@@ -218,45 +235,6 @@ class IlastikAPI(object):
         else:
             return ret_data
 
-    def get_applet(self, applet_type):
-        """
-        Args:
-            applet_type (BaseApplet or derived): the actual class one is looking
-              for.
-
-        Returns:
-            Applet
-        """
-        applets = self.applets
-        selected_applet = [applet for applet in applets
-                           if isinstance(applet, applet_type)]
-        assert len(selected_applet) == 1, (
-            "Expected only a single batch processing applet per workflow.")
-        selected_applet = selected_applet[0]
-        return selected_applet
-
-    def get_structured_info(self):
-        if self.slot_tracker is None:
-            self.initialize_voxel_server()
-        dataset_names = self.slot_tracker.get_dataset_names()
-        json_states = []
-        for lane_number, dataset_name in enumerate(dataset_names):
-            states = self.slot_tracker.get_states(dataset_name)
-            lane_states = []
-            for source_name, state in states.items():
-                tmp = collections.OrderedDict(zip(state._fields, state))
-                tmp['lane_number'] = lane_number
-                tmp['dataset_name'] = dataset_name
-                tmp['source_name'] = source_name
-                lane_states.append(tmp)
-            json_states.append(lane_states)
-        return (dataset_names, json_states)
-
-    def get_input_info(self):
-        """Gather information about inputs to the current workflow"""
-        data_selection_applet = self.get_applet(DataSelectionApplet)
-        return data_selection_applet
-
     def add_dataset(self, file_name):
         """Convenience method to add an image lane with the supplied data
 
@@ -312,6 +290,29 @@ class IlastikAPI(object):
 
             # Apply to the data selection operator
             opDataSelection.DatasetGroup[lane_index][role_index].setValue(info)
+
+    def get_structured_info(self):
+        if self.slot_tracker is None:
+            self.initialize_voxel_server()
+        dataset_names = self.slot_tracker.get_dataset_names()
+        json_states = []
+        for lane_number, dataset_name in enumerate(dataset_names):
+            states = self.slot_tracker.get_states(dataset_name)
+            lane_states = []
+            for source_name, state in states.items():
+                tmp = collections.OrderedDict(zip(state._fields, state))
+                tmp['lane_number'] = lane_number
+                tmp['dataset_name'] = dataset_name
+                tmp['source_name'] = source_name
+                lane_states.append(tmp)
+            json_states.append(lane_states)
+        return (dataset_names, json_states)
+
+    def get_input_info(self):
+        """Gather information about inputs to the current workflow"""
+        data_selection_applet = self.get_applet(DataSelectionApplet)
+        return data_selection_applet
+
 
     # --------------------------------------------------------------------------
     # NOT SURE YET:
