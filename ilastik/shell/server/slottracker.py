@@ -23,15 +23,27 @@ class SlotTracker(object):
             image_name_multislot: str,
             multislots: typing.List[Slot],
             forced_axes=None):
+        """
+        Args:
+            image_name_multislot (str): should be
+              a level 1 slot and hold a name for each image group (each lane)
+            multislots (typing.List[Slot]): Outputs of OpReorderAxis for each of the multislots
+            forced_axes (None, optional): Description
+        """
         self.image_name_multislot = image_name_multislot
         self._slot_versions = {}  # { dataset_name : { slot_name : [slot, version] } }
 
+        # TODO: name could not be enough
         self.multislot_names = [s.name for s in multislots]
         if forced_axes is None:
             self.multislots = multislots
         else:
             self.multislots = []
             for multislot in multislots:
+                # HACK: skip slots with level > 1
+                if multislot.lovel > 1:
+                    logger.info(f'skipping slot {multislot} of {multislot.getRealOperator()}')
+                    continue
                 op = OperatorWrapper(
                     OpReorderAxes,
                     parent=multislot.getRealOperator().parent,
@@ -84,7 +96,10 @@ class SlotTracker(object):
         states = collections.OrderedDict()
         slot_versions = self.get_slot_versions(dataset_name)
         for slot_name, (slot, version) in slot_versions.items():
-            axes = ''.join(slot.meta.getAxisKeys())
+            try:
+                axes = ''.join(slot.meta.getAxisKeys())
+            except AssertionError:
+                continue
             states[slot_name] = VoxelSourceState(slot_name,
                                                  axes,
                                                  slot.meta.shape,

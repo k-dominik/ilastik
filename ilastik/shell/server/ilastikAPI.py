@@ -13,6 +13,7 @@ from ilastik.applets.batchProcessing.batchProcessingApplet import BatchProcessin
 from ilastik.applets.dataSelection.dataSelectionApplet import DataSelectionApplet
 from ilastik.applets.pixelClassification import PixelClassificationApplet
 from ilastik.applets.base.applet import Applet
+from lazyflow import stype
 
 
 logger = logging.getLogger(__name__)
@@ -74,14 +75,27 @@ class IlastikAPI(object):
             return None
 
     def initialize_voxel_server(self):
-        op = self._server_shell.workflow.pcApplet.topLevelOperator
-        multislots = [op.InputImages,
-                      #op.LabelImages,
-                      op.PredictionProbabilities]
+        multislots = []
+        for applet in self.applets:
+            print(f'applet: {applet}')
+            op = applet.topLevelOperator
+            print(f'op: {op}')
+            if op is None:
+                continue
+            # Todo: go through all applets and connect slots to SlotTracker
+            tmp_slots = []
+            for slotname, slot in op.outputs.items():
+                if isinstance(slot.stype, stype.ImageType):
+                    print(slotname, slot)
+                    tmp_slots.append(slot)
+            multislots.extend(tmp_slots)
 
-        image_name_multislot = self._server_shell.workflow.dataSelectionApplet.topLevelOperator.ImageName
+        data_selection_applet = self.get_data_selection_applet()
+        image_name_multislot = data_selection_applet.topLevelOperator.ImageName
         # forcing to neuroglancer axisorder
-        self.slot_tracker = SlotTracker(image_name_multislot, multislots, forced_axes='tczyx')
+        self.slot_tracker = SlotTracker(
+            image_name_multislot, multislots, forced_axes='tczyx'
+        )
 
     def create_project(self, workflow_type: str='pixel_classification', project_path: str=None):
         """Create a new project
@@ -180,6 +194,10 @@ class IlastikAPI(object):
         batch_data_info = self._get_template_dataset_infos()
         return collections.OrderedDict(
             (role_names[k], v) for k, v in batch_data_info.items())
+
+    def get_data_selection_applet(self):
+        data_selection_applet = self._server_shell.workflow.dataSelectionApplet
+        return data_selection_applet
 
     def get_batch_applet(self):
         """Get the batch applet from the workflow applets
