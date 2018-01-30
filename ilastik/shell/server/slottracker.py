@@ -1,8 +1,10 @@
 import collections
 from functools import partial
+import typing
 
 from lazyflow.graph import OperatorWrapper
 from lazyflow.operators.opReorderAxes import OpReorderAxes
+from lazyflow.slot import Slot
 
 import logging
 
@@ -16,7 +18,11 @@ VoxelSourceState = collections.namedtuple(
 class SlotTracker(object):
     """Copied from voxel_server"""
 
-    def __init__(self, image_name_multislot, multislots, forced_axes=None):
+    def __init__(
+            self,
+            image_name_multislot: str,
+            multislots: typing.List[Slot],
+            forced_axes=None):
         self.image_name_multislot = image_name_multislot
         self._slot_versions = {}  # { dataset_name : { slot_name : [slot, version] } }
 
@@ -34,7 +40,7 @@ class SlotTracker(object):
                 op.Input.connect(multislot)
                 self.multislots.append(op.Output)
 
-    def get_dataset_names(self):
+    def get_dataset_names(self) -> typing.List[str]:
         names = []
         for lane_index, name_slot in enumerate(self.image_name_multislot):
             if name_slot.ready():
@@ -44,7 +50,7 @@ class SlotTracker(object):
             names.append(name)
         return names
 
-    def get_slot_versions(self, dataset_name):
+    def get_slot_versions(self, dataset_name: str):
         found = False
         lane_index = None
         for lane_index, name_slot in enumerate(self.image_name_multislot):
@@ -67,14 +73,14 @@ class SlotTracker(object):
 
         return self._slot_versions[dataset_name]
 
-    def _increment_version(self, dataset_name, slot, *args):
+    def _increment_version(self, dataset_name: str, slot: Slot, *args) -> None:
         for name in self._slot_versions[dataset_name].keys():
             if self._slot_versions[dataset_name][name][0] == slot:
                 self._slot_versions[dataset_name][name][1] += 1
                 return
         assert False, "Couldn't find slot"
 
-    def get_states(self, dataset_name):
+    def get_states(self, dataset_name: str):
         states = collections.OrderedDict()
         slot_versions = self.get_slot_versions(dataset_name)
         for slot_name, (slot, version) in slot_versions.items():
@@ -86,6 +92,6 @@ class SlotTracker(object):
                                                  version)
         return states
 
-    def get_slot(self, dataset_name, slot_name):
+    def get_slot(self, dataset_name: str, slot_name: str) -> Slot:
         slot_versions = self.get_slot_versions(dataset_name)
         return slot_versions[slot_name][0]
