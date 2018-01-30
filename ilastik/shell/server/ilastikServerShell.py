@@ -1,6 +1,7 @@
 """Shell container to store all normal ilastik stuff
 
 """
+import os
 
 from ilastik.shell.shellAbc import ShellABC
 from ilastik.shell.projectManager import ProjectManager
