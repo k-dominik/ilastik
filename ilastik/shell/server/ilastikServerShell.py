@@ -4,7 +4,7 @@
 
 from ilastik.shell.shellAbc import ShellABC
 from ilastik.shell.projectManager import ProjectManager
-
+from ilastik.workflow import Workflow
 import logging
 
 
@@ -21,13 +21,13 @@ class ServerShell(object):
         self.projectManager = None
 
     @property
-    def workflow(self):
+    def workflow(self) -> Workflow:
         return self.projectManager.workflow
 
     def currentImageIndex(self):
         raise NotImplementedError
 
-    def createAndLoadNewProject(self, newProjectFilePath, workflow_class):
+    def createAndLoadNewProject(self, newProjectFilePath: str, workflow_class: Workflow) -> None:
         """
         """
         hdf5File = ProjectManager.createBlankProjectFile(newProjectFilePath)
@@ -41,7 +41,7 @@ class ServerShell(object):
         self.projectManager._loadProject(hdf5File, newProjectFilePath, readOnly)
         self.projectManager.saveProject()
 
-    def openProjectFile(self, projectFilePath, force_readonly=False):
+    def openProjectFile(self, projectFilePath: str, force_readonly: bool=False) -> None:
         """
         # TODO give some feedback!
         """

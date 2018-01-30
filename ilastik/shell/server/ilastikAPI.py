@@ -14,6 +14,7 @@ from ilastik.shell.server.slottracker import SlotTracker
 from ilastik.applets.batchProcessing.batchProcessingApplet import BatchProcessingApplet
 from ilastik.applets.dataSelection.dataSelectionApplet import DataSelectionApplet
 from ilastik.applets.pixelClassification import PixelClassificationApplet
+from ilastik.applets.base.applet import Applet
 
 
 from lazyflow.graph import OperatorWrapper
@@ -88,7 +89,7 @@ class IlastikAPI(object):
         # forcing to neuroglancer axisorder
         self.slot_tracker = SlotTracker(image_name_multislot, multislots, forced_axes='tczyx')
 
-    def create_project(self, workflow_type='pixel_classification', project_path=None):
+    def create_project(self, workflow_type: str='pixel_classification', project_path: str=None):
         """Create a new project
 
         TODO: memory-only project
@@ -116,7 +117,7 @@ class IlastikAPI(object):
         else:
             raise ValueError('ProjectType needs to be PixelClassification for now')
 
-    def load_project_file(self, project_file_path):
+    def load_project_file(self, project_file_path: str):
         """Load project file from disk (local)
 
         Args:
@@ -134,33 +135,13 @@ class IlastikAPI(object):
         workflow = self._server_shell.workflow
         return workflow
 
-    def get_applet(self, applet_type):
-        """
-        Args:
-            applet_type (BaseApplet or derived): the actual class one is looking
-              for.
-
-        Returns:
-            Applet
-        """
-        applets = self.applets
-        selected_applet = [applet for applet in applets
-                           if isinstance(applet, applet_type)]
-        assert len(selected_applet) == 1, (
-            "Expected only a single batch processing applet per workflow.")
-        selected_applet = selected_applet[0]
-        return selected_applet
-
     def get_applet_names(self):
         """Convenience property, get the list of applet names
 
         Returns:
             list: List of string with workflow names
         """
-        workflow = self._server_shell.workflow
-        applet_names = None
-        if workflow is not None:
-            applet_names = [applet.name for applet in workflow.applets]
+        applet_names = [applet.name for applet in self.applets]
         return applet_names
 
     @property
@@ -175,6 +156,23 @@ class IlastikAPI(object):
         if workflow is not None:
             applets = workflow.applets
         return applets
+
+    def get_applet_by_type(self, applet_type: Applet):
+        """
+        Args:
+            applet_type (Applet or derived): the actual class one is looking
+              for.
+
+        Returns:
+            Applet
+        """
+        applets = self.applets
+        selected_applet = [applet for applet in applets
+                           if isinstance(applet, applet_type)]
+        assert len(selected_applet) == 1, (
+            "For now, expecting only a single applet of a certain type per workflow. Autocontext?!")
+        selected_applet = selected_applet[0]
+        return selected_applet
 
     def get_batch_info(self):
         """Information about what info needs to be supplied for batch processing
@@ -235,7 +233,7 @@ class IlastikAPI(object):
         else:
             return ret_data
 
-    def add_dataset(self, file_name):
+    def add_dataset(self, file_name: str):
         """Convenience method to add an image lane with the supplied data
 
         Args:
