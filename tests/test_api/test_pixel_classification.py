@@ -1,11 +1,14 @@
 import os
 import tempfile
 
+from nose.tools import assert_raises  # meh!
+
 import numpy
 import h5py
 
 from ilastik import IlastikAPI
 from ilastik.applets.dataSelection.dataSelectionApplet import DataSelectionApplet
+from ilastik.applets.featureSelection.featureSelectionApplet import FeatureSelectionApplet
 
 
 def generate_dummy_image(image_file_name, size=[256, 512, 1]):
@@ -16,9 +19,18 @@ def generate_dummy_image(image_file_name, size=[256, 512, 1]):
     return data
 
 
-class TestPixelClassificationAPI(object):
-    """ 
+class ValueSet(object):
+    """Little helper class that acts at a function that saves it's calls
     """
+
+    def __init__(self):
+        self.calls = []
+
+    def __call__(self, *args, **kwargs):
+        self.calls.append({'args': args, 'kwargs': kwargs})
+
+
+class TestPixelClassificationAPI(object):
     @classmethod
     def setup_class(cls):
         cls.api = IlastikAPI()
@@ -43,10 +55,46 @@ class TestPixelClassificationAPI(object):
         self.api.add_dataset(self.image_file)
 
         data_selection_applet = self.api.get_applet_by_type(DataSelectionApplet)
-        opDataSelection = data_selection_applet.topLevelOperator
+        op_data_selection = data_selection_applet.topLevelOperator
 
-        assert len(opDataSelection.DatasetGroup) == 1
-        data = opDataSelection.ImageGroup[0][0][:].wait()
+        assert len(op_data_selection.DatasetGroup) == 1
+        data = op_data_selection.ImageGroup[0][0][:].wait()
         assert data.shape == self.image_data.shape
         numpy.testing.assert_array_equal(data, self.image_data)
+
+    def test_03_set_value_slot(self):
+        feature_selection_applet = self.api.get_applet_by_type(FeatureSelectionApplet)
+        op_feature_selection = feature_selection_applet.topLevelOperator
+        assert_raises(
+            ValueError,
+            self.api.set_value_slot,
+            FeatureSelectionApplet,
+            'not_there_for_sure',
+            None,
+        )
+
+        assert_raises(
+            IndexError,
+            self.api.set_value_slot,
+            FeatureSelectionApplet,
+            'SelectionMatrix',
+            None,
+            9999
+        )
+
+        feature_matrix = numpy.random.randint(0, 2, (6, 7))
+        feature_matrix[3:, 0] = False
+
+        value_set = ValueSet()
+
+        op_feature_selection.SelectionMatrix.notifyDirty(value_set)
+
+        assert len(value_set.calls) == 0
+        self.api.set_value_slot(
+            FeatureSelectionApplet,
+            'SelectionMatrix',
+            feature_matrix
+        )
+        assert len(value_set.calls) == 1
+        numpy.testing.assert_array_equal(feature_matrix, op_feature_selection.SelectionMatrix.value)
 

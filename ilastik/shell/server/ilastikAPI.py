@@ -3,6 +3,7 @@ from __future__ import print_function, division
 import logging
 import collections
 import copy
+import typing
 
 import numpy
 
@@ -284,6 +285,29 @@ class IlastikAPI(object):
         n_lanes = len(opDataSelection.DatasetGroup)
         opDataSelection.DatasetGroup.resize(n_lanes + 1)
         opDataSelection.DatasetGroup[n_lanes][0].setValue(info)
+
+    def set_value_slot(
+            self,
+            applet_type: Applet,
+            slot_name: str,
+            value: typing.Any,
+            lane_index: int=0
+            ):
+        """
+
+        """
+        applet = self.get_applet_by_type(applet_type)
+        op = applet.topLevelOperator
+        if slot_name not in op.inputs:
+            raise ValueError(f'No slot found with given name {slot_name}.')
+        try:
+            lane_view = op.getLane(lane_index)
+        except IndexError:
+            raise
+
+        lane_view.inputs[slot_name].setValue(value)
+
+
 
     def add_dataset_batch(self, file_name: str):
         """Convenience method to add an image lane with the supplied data
