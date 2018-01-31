@@ -11,9 +11,11 @@ from ilastik.shell.server.ilastikServerShell import ServerShell
 from ilastik.shell.server.slottracker import SlotTracker
 from ilastik.applets.batchProcessing.batchProcessingApplet import BatchProcessingApplet
 from ilastik.applets.dataSelection.dataSelectionApplet import DataSelectionApplet
+from ilastik.applets.dataSelection.opDataSelection import DatasetInfo
 from ilastik.applets.pixelClassification import PixelClassificationApplet
 from ilastik.applets.base.applet import Applet
 from ilastik.workflow import getAvailableWorkflows
+
 from lazyflow import stype
 
 
@@ -274,6 +276,16 @@ class IlastikAPI(object):
             return ret_data
 
     def add_dataset(self, file_name: str):
+        info = DatasetInfo()
+        info.filePath = file_name
+
+        data_selection_applet = self.get_applet_by_type(applet_type=DataSelectionApplet)
+        opDataSelection = data_selection_applet.topLevelOperator
+        n_lanes = len(opDataSelection.DatasetGroup)
+        opDataSelection.DatasetGroup.resize(n_lanes + 1)
+        opDataSelection.DatasetGroup[n_lanes][0].setValue(info)
+
+    def add_dataset_batch(self, file_name: str):
         """Convenience method to add an image lane with the supplied data
 
         Args:
