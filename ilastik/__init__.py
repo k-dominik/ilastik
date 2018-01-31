@@ -143,3 +143,7 @@ def _check_depends():
 
 
 _check_depends()
+
+
+# API:
+from ilastik.shell.server.ilastikAPI import IlastikAPI
