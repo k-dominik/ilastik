@@ -13,6 +13,7 @@ from ilastik.applets.batchProcessing.batchProcessingApplet import BatchProcessin
 from ilastik.applets.dataSelection.dataSelectionApplet import DataSelectionApplet
 from ilastik.applets.pixelClassification import PixelClassificationApplet
 from ilastik.applets.base.applet import Applet
+from ilastik.workflow import getAvailableWorkflows
 from lazyflow import stype
 
 
@@ -33,24 +34,36 @@ class IlastikAPI(object):
         the given project path is created on disc.
 
         Args:
-            workflow_type (str): workflow type as string,
-              e.g. `pixel_classification`. Valid workflow types:
+            workflow_type (str): workflow type as string (display name),
+              e.g. 'Pixel Classification'. Valid workflow types:
 
-              * pixel_classification
+              * Pixel Classification
+              * Neural Network Classification
               * ...
 
             project_path (str): path to project
         """
         super(IlastikAPI, self).__init__()
-        self._server_shell = ServerShell()
-        self.slot_tracker = None
+        self._server_shell: ServerShell = ServerShell()
+        self.slot_tracker: SlotTracker = None
+        self.available_workflows = list(getAvailableWorkflows())
+
+        # HACK: for now, only support certain workflow types, that have been tested
+        # TODO: generalize, write some test for all
+        self.allowed_workflows = [
+            'Pixel Classification',
+            'Neural Network Classification'
+        ]
+
         if workflow_type is not None and project_path is not None:
             # create new project
-            logger.warning('New pr')
+            self.create_project(workflow_type, project_path)
         elif workflow_type is not None:
             # create in-memory project
-            logger.warning('Creation of in-memory projects not yet implemented! '
-                           'Instantiating empty API.')
+            raise NotImplementedError(
+                'Creation of in-memory projects not yet supported.'
+                'Please supply a file-name'
+            )
         elif project_path is not None:
             # load project
             self.load_project_file(project_path)
@@ -97,7 +110,7 @@ class IlastikAPI(object):
             image_name_multislot, multislots, forced_axes='tczyx'
         )
 
-    def create_project(self, workflow_type: str='pixel_classification', project_path: str=None):
+    def create_project(self, workflow_type: str='Pixel Classification', project_path: str=None):
         """Create a new project
 
         TODO: memory-only project
@@ -106,18 +119,33 @@ class IlastikAPI(object):
             project_path (str): path to project file, will be overwritten
               without warning.
             workflow_type (str): workflow type as string,
-              e.g. `pixel_classification`. Valid workflow types:
+            using the display name
+              e.g. `Pixel Classification`. Valid workflow types:
 
-              * pixel_classification
+              * Pixel Classification
               * ...
 
         Raises:
             ValueError: if an unsupported `workflow_type` is given
         """
+        # get display names:
+        workflow_names = {x[2]: x[0] for x in self.available_workflows}
+        if workflow_type not in workflow_names:
+            raise NotImplementedError(
+                f'Workflow {workflow_type} can not be found. '
+                'Please make sure to use the proper display name.'
+            )
+
+        # TODO: remove, once all workflows are supported
+        if workflow_type not in self.allowed_workflows:
+            raise NotImplementedError(
+                f'Workflow {workflow_type} has not been tested yet.'
+            )
+
         if project_path is None:
             raise NotImplementedError('memory-only projects have to be implemented')
         from ilastik.workflows.pixelClassification import PixelClassificationWorkflow
-        if workflow_type == 'pixel_classification':
+        if workflow_type == 'Pixel Classification':
             self._server_shell.createAndLoadNewProject(
                 project_path,
                 PixelClassificationWorkflow
