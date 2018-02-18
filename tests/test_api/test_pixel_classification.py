@@ -11,8 +11,11 @@ from ilastik.applets.dataSelection.dataSelectionApplet import DataSelectionApple
 from ilastik.applets.featureSelection.featureSelectionApplet import FeatureSelectionApplet
 
 
-def generate_dummy_image(image_file_name, size=[256, 512, 1]):
-    data = numpy.random.randint(0, 256, size, dtype=numpy.uint8)
+def generate_dummy_image(image_file_name, data_shape=[256, 512, 1]):
+    data = numpy.zeros(data_shape, dtype=numpy.uint8)
+    center = [x // 2 for x in data_shape]
+    data[0:center[0], 0:center[1]] = 255
+    data[center[0]:, center[1]:] = 255
     with h5py.File(image_file_name) as f:
         g = f.create_group('volume')
         g.create_dataset('raw', data=data)
