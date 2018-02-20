@@ -41,7 +41,7 @@ class SlotTracker(object):
             self.multislots = []
             for multislot in multislots:
                 # HACK: skip slots with level > 1
-                if multislot.lovel > 1:
+                if multislot.level > 1:
                     logger.info(f'skipping slot {multislot} of {multislot.getRealOperator()}')
                     continue
                 op = OperatorWrapper(
