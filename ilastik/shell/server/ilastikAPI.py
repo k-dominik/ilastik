@@ -163,7 +163,7 @@ class IlastikAPI(object):
           project_file_path (str): path of `.ilp` file
         """
         self._server_shell.openProjectFile(project_file_path)
-        pc_applet = self.get_applet(PixelClassificationApplet)
+        pc_applet = self.get_applet_by_type(PixelClassificationApplet)
         tlo = pc_applet.topLevelOperator
         tlo.FreezePredictions.setValue(True)
         tlo.FreezePredictions.setValue(False)
