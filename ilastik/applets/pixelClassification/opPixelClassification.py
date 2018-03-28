@@ -119,6 +119,13 @@ class OpPixelClassification( Operator ):
 
         # SPECIAL connection: The LabelInputs slot doesn't get it's data  
         #  from the InputImages slot, but it's shape must match.
+        # Note: the connection itself is not special, it's just a slot-slot
+        # connection. Two things are peculiar:
+        # 1) an input is connected to another input of the same op..., well
+        # 2) the slot that is finally connected to this one is in
+        #    OpCompressedUserLabelArray. And there only the metadata of this
+        #    input slot is accessed! That's why it doesn't get any data from
+        #    the input
         self.LabelInputs.connect( self.InputImages )
 
         # Hook up Labeling Pipeline
