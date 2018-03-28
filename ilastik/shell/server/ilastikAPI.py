@@ -19,13 +19,13 @@ from ilastik.workflow import getAvailableWorkflows
 
 from lazyflow import stype
 
+from ilastik.workflow import Workflow
 
 logger = logging.getLogger(__name__)
 
 
-class IlastikAPI(object):
-    """Collection of user-friendly methods for interaction with ilastik
-    """
+class _IlastikAPI(object):
+# TODO: add MemoryMonitor
     def __init__(self, workflow_type: str=None, project_path: str=None):
         """Initialize a new API object
 
@@ -48,8 +48,9 @@ class IlastikAPI(object):
         """
         super(IlastikAPI, self).__init__()
         self._server_shell: ServerShell = ServerShell()
-        self.slot_tracker: SlotTracker = None
-        self.available_workflows = list(getAvailableWorkflows())
+        self.slot_tracker: typing.Optional[SlotTracker] = None
+        self.available_workflows: typing.list[typing.Tuple[Workflow, str, str]] = \
+            list(getAvailableWorkflows())
 
         # HACK: for now, only support certain workflow types, that have been tested
         # TODO: generalize, write some test for all
@@ -70,25 +71,6 @@ class IlastikAPI(object):
         elif project_path is not None:
             # load project
             self.load_project_file(project_path)
-
-    def __repr__(self):
-        return type(self)
-
-    def __str__(self):
-        return "{type} at {address}".format(type=type(self), address=hex(id(self)))
-
-    @property
-    def workflow_name(self):
-        """get the current workflow name
-
-        Returns:
-            str: workflow name
-        """
-        workflow = self._server_shell.workflow
-        if workflow is not None:
-            return workflow.workflowName
-        else:
-            return None
 
     def initialize_voxel_server(self):
         multislots = []
@@ -147,11 +129,10 @@ class IlastikAPI(object):
 
         if project_path is None:
             raise NotImplementedError('memory-only projects have to be implemented')
-        from ilastik.workflows.pixelClassification import PixelClassificationWorkflow
         if workflow_type == 'Pixel Classification':
             self._server_shell.createAndLoadNewProject(
                 project_path,
-                PixelClassificationWorkflow
+                workflw_names[workflow_type]
             )
         else:
             raise ValueError('ProjectType needs to be PixelClassification for now')
@@ -168,21 +149,168 @@ class IlastikAPI(object):
         tlo.FreezePredictions.setValue(True)
         tlo.FreezePredictions.setValue(False)
 
+
+class IlastikAPI(_IlastikAPI):
+    """
+    Main API class Singleton
+
+    right now we enforce only one API instance per interpreter
+    Hence, only one workflow can be active at a given time to be on the safe
+    side.
+
+    """
+    __instance = None
+
+    def __new__(cls, *args, **kwargs):
+        if cls.__instance is None:
+            cls._instance = super().__new__(cls, *args, **kwargs)
+
+        return cls.__instance
+
+
+class IlastikAPI_deprecated(object):
+    """Collection of user-friendly methods for interaction with ilastik
+    """
+    def __init__(self, workflow_type: str=None, project_path: str=None):
+        """Initialize a new API object
+
+        If `workflow_type` is given and `project_path` is None, an in-memory
+        project is created.
+        If `project_path` is given and `workflow_type` is not given, an existing
+        project is assumed.
+        If both `workflow_type` and `project_path` are given, a new project with
+        the given project path is created on disc.
+
+        Args:
+            workflow_type (str): workflow type as string (display name),
+              e.g. 'Pixel Classification'. Valid workflow types:
+
+              * Pixel Classification
+              * Neural Network Classification
+              * ...
+
+            project_path (str): path to project
+        """
+        super(IlastikAPI, self).__init__()
+        self._server_shell: ServerShell = ServerShell()
+        self.slot_tracker: SlotTracker = None
+        self.available_workflows = list(getAvailableWorkflows())
+
+        # HACK: for now, only support certain workflow types, that have been tested
+        # TODO: generalize, write some test for all
+        self.allowed_workflows = [
+            'Pixel Classification',
+            'Neural Network Classification'
+        ]
+
+        if workflow_type is not None and project_path is not None:
+            # create new project
+            self.create_project(workflow_type, project_path)
+        elif workflow_type is not None:
+            # create in-memory project
+            raise NotImplementedError(
+                'Creation of in-memory projects not yet supported.'
+                'Please supply a file-name'
+            )
+        elif project_path is not None:
+            # load project
+            self.load_project_file(project_path)
+
+    def initialize_voxel_server(self):
+        multislots = []
+        for applet in self.applets:
+            print(f'applet: {applet}')
+            op = applet.topLevelOperator
+            print(f'op: {op}')
+            if op is None:
+                continue
+            # Todo: go through all applets and connect slots to SlotTracker
+            tmp_slots = []
+            for slotname, slot in op.outputs.items():
+                if isinstance(slot.stype, stype.ImageType):
+                    print(slotname, slot)
+                    tmp_slots.append(slot)
+            multislots.extend(tmp_slots)
+
+        data_selection_applet = self.get_data_selection_applet()
+        image_name_multislot = data_selection_applet.topLevelOperator.ImageName
+        # forcing to neuroglancer axisorder
+        self._slot_tracker = SlotTracker(
+            image_name_multislot, multislots, forced_axes='tczyx'
+        )
+
+    def create_project(self, workflow_type: str='Pixel Classification', project_path: str=None):
+        """Create a new project
+
+        TODO: memory-only project
+
+        Args:
+            project_path (str): path to project file, will be overwritten
+              without warning.
+            workflow_type (str): workflow type as string,
+            using the display name
+              e.g. `Pixel Classification`. Valid workflow types:
+
+              * Pixel Classification
+              * ...
+
+        Raises:
+            ValueError: if an unsupported `workflow_type` is given
+        """
+        # get display names:
+        workflow_names = {x[2]: x[0] for x in self.available_workflows}
+        if workflow_type not in workflow_names:
+            raise NotImplementedError(
+                f'Workflow {workflow_type} can not be found. '
+                'Please make sure to use the proper display name.'
+            )
+
+        # TODO: remove, once all workflows are supported
+        if workflow_type not in self.allowed_workflows:
+            raise NotImplementedError(
+                f'Workflow {workflow_type} has not been tested yet.'
+            )
+
+        if project_path is None:
+            raise NotImplementedError('memory-only projects have to be implemented')
+        from ilastik.workflows.pixelClassification import PixelClassificationWorkflow
+        if workflow_type == 'Pixel Classification':
+            self._server_shell.createAndLoadNewProject(
+                project_path,
+                PixelClassificationWorkflow
+            )
+        else:
+            raise ValueError('ProjectType needs to be PixelClassification for now')
+
     def get_workflow_status(self):
         """Collects information about all applets into a dictionary
         """
         workflow = self._server_shell.workflow
         return workflow
 
-    def get_applet_names(self):
-        """Convenience property, get the list of applet names
+    def get_structured_info(self):
+        if self._slot_tracker is None:
+            self.initialize_voxel_server()
+        dataset_names = self._slot_tracker.get_dataset_names()
+        json_states = []
+        for lane_number, dataset_name in enumerate(dataset_names):
+            states = self._slot_tracker.get_states(dataset_name)
+            lane_states = []
+            for source_name, state in states.items():
+                tmp = collections.OrderedDict(zip(state._fields, state))
+                tmp['lane_number'] = lane_number
+                tmp['dataset_name'] = dataset_name
+                tmp['source_name'] = source_name
+                lane_states.append(tmp)
+            json_states.append(lane_states)
+        return (dataset_names, json_states)
 
-        Returns:
-            list: List of string with workflow names
-        """
-        applet_names = [applet.name for applet in self.applets]
-        return applet_names
+    def get_input_info(self):
+        """Gather information about inputs to the current workflow"""
+        data_selection_applet = self.get_applet(DataSelectionApplet)
+        return data_selection_applet
 
+    # TODO: should be Applets Object
     @property
     def applets(self):
         """Get info on all applets in the current workflow
@@ -196,6 +324,7 @@ class IlastikAPI(object):
             applets = workflow.applets
         return applets
 
+    # TODO: move to Applets object
     def get_applet_by_type(self, applet_type: Applet):
         """
         Args:
@@ -226,10 +355,12 @@ class IlastikAPI(object):
         return collections.OrderedDict(
             (role_names[k], v) for k, v in batch_data_info.items())
 
+    # TODO: move to Applets object
     def get_data_selection_applet(self):
         data_selection_applet = self._server_shell.workflow.dataSelectionApplet
         return data_selection_applet
 
+    # TODO: move to Applets object
     def get_batch_applet(self):
         """Get the batch applet from the workflow applets
         """
@@ -276,6 +407,7 @@ class IlastikAPI(object):
         else:
             return ret_data
 
+    # TODO: modify as to use the Applets thing
     def add_dataset(self, file_name: str):
         info = DatasetInfo()
         info.filePath = file_name
@@ -286,6 +418,7 @@ class IlastikAPI(object):
         opDataSelection.DatasetGroup.resize(n_lanes + 1)
         opDataSelection.DatasetGroup[n_lanes][0].setValue(info)
 
+    # TODO: should be in Applets?
     def set_value_slot(
             self,
             applet_type: Applet,
@@ -306,8 +439,6 @@ class IlastikAPI(object):
             raise
 
         lane_view.inputs[slot_name].setValue(value)
-
-
 
     def add_dataset_batch(self, file_name: str):
         """Convenience method to add an image lane with the supplied data
@@ -364,28 +495,6 @@ class IlastikAPI(object):
 
             # Apply to the data selection operator
             opDataSelection.DatasetGroup[lane_index][role_index].setValue(info)
-
-    def get_structured_info(self):
-        if self.slot_tracker is None:
-            self.initialize_voxel_server()
-        dataset_names = self.slot_tracker.get_dataset_names()
-        json_states = []
-        for lane_number, dataset_name in enumerate(dataset_names):
-            states = self.slot_tracker.get_states(dataset_name)
-            lane_states = []
-            for source_name, state in states.items():
-                tmp = collections.OrderedDict(zip(state._fields, state))
-                tmp['lane_number'] = lane_number
-                tmp['dataset_name'] = dataset_name
-                tmp['source_name'] = source_name
-                lane_states.append(tmp)
-            json_states.append(lane_states)
-        return (dataset_names, json_states)
-
-    def get_input_info(self):
-        """Gather information about inputs to the current workflow"""
-        data_selection_applet = self.get_applet(DataSelectionApplet)
-        return data_selection_applet
 
 
     # --------------------------------------------------------------------------
