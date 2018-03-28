@@ -2,6 +2,7 @@
 
 """
 import os
+import typing
 
 from ilastik.shell.shellAbc import ShellABC
 from ilastik.shell.projectManager import ProjectManager
@@ -19,7 +20,7 @@ class ServerShell(object):
     """
     def __init__(self):
         self.workflow_options = None
-        self.projectManager = None
+        self.projectManager: typing.Optional[ProjectManager] = None
 
     @property
     def workflow(self) -> Workflow:
@@ -103,10 +104,10 @@ class ServerShell(object):
             self.projectManager._importProject(oldProjectFilePath, hdf5File, projectFilePath)
 
     def setAppletEnabled(self, applet, enabled):
-        pass
+        raise NotImplementedError("This is GUI functionality, you're in server mode!")
 
     def isAppletEnabled(self, applet):
-        return False
+        raise NotImplementedError("This is GUI functionality, you're in server mode!")
 
     def enableProjectChanges(self, enabled):
         pass
