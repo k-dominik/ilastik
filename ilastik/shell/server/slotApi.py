@@ -17,9 +17,12 @@ class WrappedSlot(object):
     def __init__(self, slot: Slot) -> None:
         self._slot = slot
 
+    def __getitem__(self, key):
+        return self.slot.__getitem__(key)
+
 
 class WrappedInputSlot(WrappedSlot):
-    def __init__(self, slot: InputSlot, incoming_axis_order: str='tczxy') -> None:
+    def __init__(self, slot: InputSlot, incoming_axis_order: str='tczyx') -> None:
         """Summary
 
         Args:
@@ -41,6 +44,7 @@ class WrappedInputSlot(WrappedSlot):
                 self,
                 slicing: typing.Tuple[slice],
                 data: numpy.ndarray,
+                subindex: int=None,
                 incoming_axis_order: str=None
             ) -> None:
         """Write data into slot
@@ -50,25 +54,35 @@ class WrappedInputSlot(WrappedSlot):
               must equal self.incoming_axis_order, or, if supplied,
               incoming_axis_order param of this method
             data (numpy.ndarray): data to be written
+            subindex (int): for level1 slots, the sub index.
             incoming_axis_order (str, optional): Overrules
               self.incoming_axis_order
         """
+        if self.slot.level == 1:
+            if subindex is None:
+                raise ValueError("Subindex needs to be given for multi-level-slots!")
+            slot = self.slot[subindex]
+        else:
+            slot = self.slot
         axis_order = incoming_axis_order or self.axis_order
         print(f'axis_order: {axis_order}')
         taggedArray = data.view(vigra.VigraArray)
         taggedArray.axistags = vigra.defaultAxistags(axis_order)
+        print(f'tagged_array_axis: {taggedArray.axistags}')
 
-        slot_axis_tags = self._slot.meta.axistags
+        slot_axis_tags = slot.meta.axistags
         slot_axis_keys = [tag.key for tag in slot_axis_tags]
+        print(f'slot_axis_keys: {slot_axis_keys}')
         transposedArray = taggedArray.withAxes(*slot_axis_keys)
 
         taggedSlicing = dict(list(zip(axis_order, slicing)))
+        print(f'taggedSlicing: {taggedSlicing}')
         transposedSlicing = ()
         for k in slot_axis_keys:
             if k in axis_order:
                 transposedSlicing += (taggedSlicing[k],)
-        self._slot[transposedSlicing] = transposedArray.view(numpy.ndarray)
-
+        print(f'transposedSlicing: {transposedSlicing}')
+        slot[transposedSlicing] = transposedArray.view(numpy.ndarray)
 
 
 class WrappedOutputSlot(WrappedSlot):
