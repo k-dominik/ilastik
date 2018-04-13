@@ -42,13 +42,7 @@ class WrappedApplet(object):
         for output_slot in tlo.outputSlots:
             logger.debug(f"adding output_slot: {output_slot}")
 
-            op_reorder.AxisOrder.setValue(forced_axes)
-            op_reorder.Input.connect(output_slot)
-            self._output_slots[output_slot.name] = {
-                '_slot': output_slot,
-                'slot': OpReorderAxes(op_reorder.Output)
-
-            }
+            
 
     @property
     def input_slots(self):
