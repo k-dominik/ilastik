@@ -6,7 +6,7 @@ import numpy
 from lazyflow.slot import Slot, InputSlot, OutputSlot
 from lazyflow.operators import OpReorderAxes
 from lazyflow.operatorWrapper import OperatorWrapper
-
+from lazyflow.stype import ArrayLike, ValueSlotType
 import vigra
 
 
@@ -17,11 +17,42 @@ class WrappedSlot(object):
     def __init__(self, slot: Slot) -> None:
         self._slot = slot
 
-    def __getitem__(self, key):
-        return self.slot.__getitem__(key)
+
+class WrappedValueSlotTypeInputSlot(WrappedSlot):
+    def __init__(self, slot: InputSlot) -> None:
+        """Summary
+
+        Args:
+            slot (Slot): the slot to be wrapped, level 0, or level 1
+              this slot will only store values, and not request anything from
+              upstream
+        """
+        print(f'Constructing {type(self)} for {slot}, {slot.stype}')
+        assert isinstance(slot, InputSlot)
+        if not isinstance(slot.stype, ValueSlotType):
+            raise ValueError(
+                f'This class only wraps ArrayLike slots. got {slot.stype}.'
+            )
+        assert slot.level == 0 or slot.level == 1
+        super().__init__(slot)
+        # need to do any magic before assigning it?
+        self.slot = self._slot
+
+    def set_value(self, value: typing.Any, subindex: int=None):
+        if self.slot.level == 1:
+            if subindex is None:
+                raise ValueError("Subindex needs to be given for multi-level-slots!")
+            if len(self.slot) >= subindex:
+                self.slot.resize(subindex + 1)
+            slot = self.slot[subindex]
+        else:
+            slot = self.slot
+
+        slot.setValue(value)
 
 
-class WrappedInputSlot(WrappedSlot):
+
+class WrappedArrayLikeInputSlot(WrappedSlot):
     def __init__(self, slot: InputSlot, incoming_axis_order: str='tczyx') -> None:
         """Summary
 
@@ -29,7 +60,12 @@ class WrappedInputSlot(WrappedSlot):
             slot (Slot): the slot to be wrapped, level 0, or level 1
             incoming_axis_order (str): Axisorder that is used for set_in_slot
         """
+        print(f'Constructing {type(self)} for {slot}, {slot.stype}')
         assert isinstance(slot, InputSlot)
+        if not isinstance(slot.stype, ArrayLike):
+            raise ValueError(
+                f'This class only wraps ArrayLike slots. got {slot.stype}.'
+            )
         assert slot.level == 0 or slot.level == 1
         super().__init__(slot)
         # need to do any magic befor assigning it?
@@ -85,11 +121,12 @@ class WrappedInputSlot(WrappedSlot):
         slot[transposedSlicing] = transposedArray.view(numpy.ndarray)
 
 
-class WrappedOutputSlot(WrappedSlot):
+class WrappedArrayLikeOutputSlot(WrappedSlot):
     def __init__(self, slot: OutputSlot, forced_axisorder: str='tczxy') -> None:
         assert isinstance(slot, OutputSlot)
         super().__init__(slot)
         assert slot.level == 1, f"Only supporting level 1 slots, got {slot.level}"
+        # TODO: implementation for level 1 slots
         self._op_reorder = OperatorWrapper(
             OpReorderAxes,
             # Here graph, not parent in order to allow wrapping of slots of
