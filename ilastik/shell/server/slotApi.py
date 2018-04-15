@@ -127,12 +127,20 @@ class WrappedArrayLikeOutputSlot(WrappedSlot):
         super().__init__(slot)
         assert slot.level == 1, f"Only supporting level 1 slots, got {slot.level}"
         # TODO: implementation for level 1 slots
-        self._op_reorder = OperatorWrapper(
-            OpReorderAxes,
-            # Here graph, not parent in order to allow wrapping of slots of
-            # single operators.
-            graph=slot.getRealOperator().graph,
-            broadcastingSlotNames=['AxisOrder'])
+        if slot.getRealOperator().parent is not None:
+            self._op_reorder = OperatorWrapper(
+                OpReorderAxes,
+                # Here graph, not parent in order to allow wrapping of slots of
+                # single operators.
+                parent=slot.getRealOperator().parent,
+                broadcastingSlotNames=['AxisOrder'])
+        else:
+            self._op_reorder = OperatorWrapper(
+                OpReorderAxes,
+                # Here graph, not parent in order to allow wrapping of slots of
+                # single operators.
+                graph=slot.getRealOperator().graph,
+                broadcastingSlotNames=['AxisOrder'])
         self._op_reorder.AxisOrder.setValue(forced_axisorder)
         self._op_reorder.Input.connect(slot)
         self.slot = self._op_reorder.Output
