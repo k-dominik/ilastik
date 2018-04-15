@@ -9,7 +9,7 @@ import numpy
 
 from ilastik.applets.dataSelection.opDataSelection import DatasetInfo
 from ilastik.shell.server.ilastikServerShell import ServerShell
-from ilastik.shell.server.slottracker import SlotTracker
+from ilastik.shell.server.appletApi import WrappedApplet, Applets
 from ilastik.applets.batchProcessing.batchProcessingApplet import BatchProcessingApplet
 from ilastik.applets.dataSelection.dataSelectionApplet import DataSelectionApplet
 from ilastik.applets.dataSelection.opDataSelection import DatasetInfo
@@ -26,7 +26,16 @@ logger = logging.getLogger(__name__)
 
 class _IlastikAPI(object):
 # TODO: add MemoryMonitor
-    def __init__(self, workflow_type: str=None, project_path: str=None):
+
+    def __new__(cls, *args, **kwargs):
+        return super().__new__(cls)
+
+    def __init__(
+            self,
+            workflow_type: str=None,
+            project_path: str=None,
+            input_axis_order: str='tczyx',
+            output_axis_order: str='tczyx'):
         """Initialize a new API object
 
         If `workflow_type` is given and `project_path` is None, an in-memory
@@ -46,11 +55,13 @@ class _IlastikAPI(object):
 
             project_path (str): path to project
         """
-        super(IlastikAPI, self).__init__()
-        self._server_shell: ServerShell = ServerShell()
-        self.slot_tracker: typing.Optional[SlotTracker] = None
-        self.available_workflows: typing.list[typing.Tuple[Workflow, str, str]] = \
+        super().__init__()
+        self._server_shell: ServerShell = None
+        self._wrapped_applets: typing.Dict[str, WrappedApplet] = None
+        self.available_workflows: typing.list[typing.Tuple[Workfklow, str, str]] = \
             list(getAvailableWorkflows())
+        self._input_axis_order = input_axis_order
+        self._output_axis_order = output_axis_order
 
         # HACK: for now, only support certain workflow types, that have been tested
         # TODO: generalize, write some test for all
@@ -72,28 +83,6 @@ class _IlastikAPI(object):
             # load project
             self.load_project_file(project_path)
 
-    def initialize_voxel_server(self):
-        multislots = []
-        for applet in self.applets:
-            print(f'applet: {applet}')
-            op = applet.topLevelOperator
-            print(f'op: {op}')
-            if op is None:
-                continue
-            # Todo: go through all applets and connect slots to SlotTracker
-            tmp_slots = []
-            for slotname, slot in op.outputs.items():
-                if isinstance(slot.stype, stype.ImageType):
-                    print(slotname, slot)
-                    tmp_slots.append(slot)
-            multislots.extend(tmp_slots)
-
-        data_selection_applet = self.get_data_selection_applet()
-        image_name_multislot = data_selection_applet.topLevelOperator.ImageName
-        # forcing to neuroglancer axisorder
-        self.slot_tracker = SlotTracker(
-            image_name_multislot, multislots, forced_axes='tczyx'
-        )
 
     def create_project(self, workflow_type: str='Pixel Classification', project_path: str=None):
         """Create a new project
@@ -113,6 +102,7 @@ class _IlastikAPI(object):
         Raises:
             ValueError: if an unsupported `workflow_type` is given
         """
+        self.cleanup()
         # get display names:
         workflow_names = {x[2]: x[0] for x in self.available_workflows}
         if workflow_type not in workflow_names:
@@ -129,13 +119,18 @@ class _IlastikAPI(object):
 
         if project_path is None:
             raise NotImplementedError('memory-only projects have to be implemented')
+
+        self._server_shell = ServerShell()
+
         if workflow_type == 'Pixel Classification':
             self._server_shell.createAndLoadNewProject(
                 project_path,
-                workflw_names[workflow_type]
+                workflow_names[workflow_type]
             )
         else:
             raise ValueError('ProjectType needs to be PixelClassification for now')
+
+        self.initialize_wrappers()
 
     def load_project_file(self, project_file_path: str):
         """Load project file from disk (local)
@@ -143,11 +138,40 @@ class _IlastikAPI(object):
         Args:
           project_file_path (str): path of `.ilp` file
         """
+        self.cleanup()
+        self._server_shell = ServerShell()
         self._server_shell.openProjectFile(project_file_path)
         pc_applet = self.get_applet_by_type(PixelClassificationApplet)
         tlo = pc_applet.topLevelOperator
         tlo.FreezePredictions.setValue(True)
         tlo.FreezePredictions.setValue(False)
+
+    def initialize_wrappers(self):
+        self._wrapped_applets = collections.OrderedDict()
+        if self._server_shell is None:
+            return
+
+        applets = self._server_shell.applets
+        self._wrapped_applets = Applets(applets, self._input_axis_order, self._output_axis_order)
+
+    def add_dataset(self, file_name: str):
+        info = DatasetInfo()
+        info.filePath = file_name
+
+        data_selection_applet = self._wrapped_applets[DataSelectionApplet]
+        opDataSelection = data_selection_applet._applet.topLevelOperator
+        n_lanes = len(opDataSelection.DatasetGroup)
+        opDataSelection.DatasetGroup.resize(n_lanes + 1)
+        opDataSelection.DatasetGroup[n_lanes][0].setValue(info)
+
+    @property
+    def applets(self):
+        return self._wrapped_applets
+    
+
+    def cleanup(self):
+        self._server_shell = None
+        self._wrapped_applets = None
 
 
 class IlastikAPI(_IlastikAPI):
@@ -163,7 +187,7 @@ class IlastikAPI(_IlastikAPI):
 
     def __new__(cls, *args, **kwargs):
         if cls.__instance is None:
-            cls._instance = super().__new__(cls, *args, **kwargs)
+            cls.__instance = super().__new__(cls, *args, *kwargs)
 
         return cls.__instance
 

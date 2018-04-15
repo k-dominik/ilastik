@@ -7,6 +7,7 @@ import typing
 from ilastik.shell.shellAbc import ShellABC
 from ilastik.shell.projectManager import ProjectManager
 from ilastik.workflow import Workflow
+from ilastik.applets.base.applet import Applet
 import logging
 
 
@@ -26,6 +27,10 @@ class ServerShell(object):
     def workflow(self) -> Workflow:
         return self.projectManager.workflow
 
+    @property
+    def applets(self) -> typing.List[Applet]:
+        return self.workflow.applets
+
     def currentImageIndex(self):
         raise NotImplementedError
 
@@ -42,6 +47,9 @@ class ServerShell(object):
             workflow_cmdline_args=self.workflow_options)
         self.projectManager._loadProject(hdf5File, newProjectFilePath, readOnly)
         self.projectManager.saveProject()
+
+        data_selection = self.applets[0]
+        # data_selection.topLevelOperator.addLane(0)
 
     def openProjectFile(self, projectFilePath: str, force_readonly: bool=False) -> None:
         """
@@ -104,10 +112,11 @@ class ServerShell(object):
             self.projectManager._importProject(oldProjectFilePath, hdf5File, projectFilePath)
 
     def setAppletEnabled(self, applet, enabled):
-        raise NotImplementedError("This is GUI functionality, you're in server mode!")
+        pass
 
     def isAppletEnabled(self, applet):
-        raise NotImplementedError("This is GUI functionality, you're in server mode!")
+        # False as in headless-shell - maybe should be True all the time?
+        return False
 
     def enableProjectChanges(self, enabled):
         pass
