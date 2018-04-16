@@ -170,7 +170,7 @@ class _IlastikAPI(object):
     @property
     def applets(self):
         return self._wrapped_applets
-    
+
 
     def cleanup(self) -> None:
         self._server_shell = None
