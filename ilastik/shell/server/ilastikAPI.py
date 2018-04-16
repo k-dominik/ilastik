@@ -141,8 +141,9 @@ class _IlastikAPI(object):
         self.cleanup()
         self._server_shell = ServerShell()
         self._server_shell.openProjectFile(project_file_path)
-        pc_applet = self.get_applet_by_type(PixelClassificationApplet)
-        tlo = pc_applet.topLevelOperator
+        self.initialize_wrappers()
+        pc_applet = self._wrapped_applets[PixelClassificationApplet]
+        tlo = pc_applet._applet.topLevelOperator
         tlo.FreezePredictions.setValue(True)
         tlo.FreezePredictions.setValue(False)
 
@@ -154,7 +155,7 @@ class _IlastikAPI(object):
         applets = self._server_shell.applets
         self._wrapped_applets = Applets(applets, self._input_axis_order, self._output_axis_order)
 
-    def add_dataset(self, file_name: str):
+    def add_dataset(self, file_name: str) -> int:
         info = DatasetInfo()
         info.filePath = file_name
 
@@ -164,12 +165,14 @@ class _IlastikAPI(object):
         opDataSelection.DatasetGroup.resize(n_lanes + 1)
         opDataSelection.DatasetGroup[n_lanes][0].setValue(info)
 
+        return n_lanes
+
     @property
     def applets(self):
         return self._wrapped_applets
     
 
-    def cleanup(self):
+    def cleanup(self) -> None:
         self._server_shell = None
         self._wrapped_applets = None
 
