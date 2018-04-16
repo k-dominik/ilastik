@@ -26,9 +26,9 @@ class WrappedApplet(object):
             output_axis_order: str='tczyx'
             ) -> None:
         """
-        
+
         # TLOs of applets implement the concept of image lanes
-          Therefore one can find 
+          Therefore one can find
           * level 0 slots (input?!) parameters applying to all lanes
           * level 1 slots (regular case, one slot per image lane)
           * level > 1 slots: will not wrap those atm
