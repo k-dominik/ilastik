@@ -58,7 +58,7 @@ class _IlastikAPI(object):
         """
         super().__init__()
         self._server_shell: ServerShell = None
-        self._voxel_server: VoxelServer = None
+        self._slot_tracker: SlotTracker = None
         self._wrapped_applets: typing.Dict[str, WrappedApplet] = None
         self.available_workflows: typing.list[typing.Tuple[Workfklow, str, str]] = \
             list(getAvailableWorkflows())
