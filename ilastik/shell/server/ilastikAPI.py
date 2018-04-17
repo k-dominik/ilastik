@@ -7,6 +7,7 @@ import typing
 
 import numpy
 
+from ilastik.shell.server.slottracker import SlotTracker
 from ilastik.applets.dataSelection.opDataSelection import DatasetInfo
 from ilastik.shell.server.ilastikServerShell import ServerShell
 from ilastik.shell.server.appletApi import WrappedApplet, Applets
@@ -57,6 +58,7 @@ class _IlastikAPI(object):
         """
         super().__init__()
         self._server_shell: ServerShell = None
+        self._voxel_server: VoxelServer = None
         self._wrapped_applets: typing.Dict[str, WrappedApplet] = None
         self.available_workflows: typing.list[typing.Tuple[Workfklow, str, str]] = \
             list(getAvailableWorkflows())
@@ -154,6 +156,7 @@ class _IlastikAPI(object):
 
         applets = self._server_shell.applets
         self._wrapped_applets = Applets(applets, self._input_axis_order, self._output_axis_order)
+        self.initialize_voxel_server()
 
     def add_dataset(self, file_name: str) -> int:
         info = DatasetInfo()
@@ -165,17 +168,62 @@ class _IlastikAPI(object):
         opDataSelection.DatasetGroup.resize(n_lanes + 1)
         opDataSelection.DatasetGroup[n_lanes][0].setValue(info)
 
+        # self.initialize_voxel_server()
         return n_lanes
 
     @property
     def applets(self):
         return self._wrapped_applets
 
+    @property
+    def dataset_names(self):
+        return self._wrapped_applets.dataset_names
 
     def cleanup(self) -> None:
         self._server_shell = None
         self._wrapped_applets = None
 
+    def initialize_voxel_server(self):
+        multislots = []
+        for wrapped_applet in self._wrapped_applets:
+            applet = wrapped_applet._applet
+            print(f'applet: {applet}')
+            op = applet.topLevelOperator
+            print(f'op: {op}')
+            if op is None:
+                continue
+            # Todo: go through all applets and connect slots to SlotTracker
+            tmp_slots = []
+            for slotname, slot in op.outputs.items():
+                if isinstance(slot.stype, stype.ImageType):
+                    print(slotname, slot)
+                    tmp_slots.append(slot)
+            multislots.extend(tmp_slots)
+
+        data_selection_applet = self._wrapped_applets[DataSelectionApplet]
+        image_name_multislot = data_selection_applet._applet.topLevelOperator.ImageName
+        # forcing to neuroglancer axisorder
+        self._slot_tracker = SlotTracker(
+            image_name_multislot, multislots, forced_axes='tczyx'
+        )
+
+
+    def get_structured_info(self):
+        if self._slot_tracker is None:
+            self.initialize_voxel_server()
+        dataset_names = self._slot_tracker.get_dataset_names()
+        json_states = []
+        for lane_number, dataset_name in enumerate(dataset_names):
+            states = self._slot_tracker.get_states(dataset_name)
+            lane_states = []
+            for source_name, state in states.items():
+                tmp = collections.OrderedDict(zip(state._fields, state))
+                tmp['lane_number'] = lane_number
+                tmp['dataset_name'] = dataset_name
+                tmp['source_name'] = source_name
+                lane_states.append(tmp)
+            json_states.append(lane_states)
+        return (dataset_names, json_states)
 
 class IlastikAPI(_IlastikAPI):
     """

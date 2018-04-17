@@ -53,8 +53,10 @@ class WrappedApplet(object):
     def _initialize_applet(self, applet: Applet) -> None:
         self._applet = applet
 
-    def get_lane(self, lane_index: int) -> typing.Dict[str, WrappedSlot]:
+    def get_wrapped_slots(self, lane_index: int) -> typing.Dict[str, WrappedSlot]:
         tlo = self._applet.topLevelOperator
+        if tlo is None:
+            return {'input_slots': None, 'output_slots': None}
         # TODO: initialize inputs and outputs
         # print(tlo)
         # print(len(tlo.inputs))
@@ -155,6 +157,33 @@ class Applets(object):
         # TODO: build and index or something, or memoize getitem
         # TODO: register callbacks
         self._applets.append(WrappedApplet(applet, self._input_axis_order, self._output_axis_order))
+
+    def get_slot_version(self, dataset_name):
+        pass
+
+    @property
+    def dataset_names(self):
+        data_selection_applet = self[DataSelectionApplet]
+        opDataSelection = data_selection_applet._applet.topLevelOperator
+        dataset_names = list(opDataSelection.ImageName)
+        return dataset_names
+
+    def get_slot_versions(self, dataset_name):
+        lane_index = self.dataset_names.index(dataset_name)
+        for applet in self._applets:
+            lane_data = applet.get_wrapped_slots(lane_index)
+            if lane_data['output_slots'] is None:
+                continue
+            for output_slot_data in lane_data['output_slots'].values():
+                output_slot = output_slot_data['slot']
+                if isinstance(output_slot, list):
+                    # level 2 slot: skipping
+                    continue
+                elif output_slot.slot.level == 1:
+                    print(f"{applet.name}, {output_slot.slot.name}, {output_slot.slot.stype}")                    
+                else:
+                    continue
+
 
     def __getitem__(
             self,
