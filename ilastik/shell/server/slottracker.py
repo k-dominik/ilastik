@@ -34,7 +34,7 @@ class SlotTracker(object):
         self._slot_versions = {}  # { dataset_name : { slot_name : [slot, version] } }
 
         # TODO: name could not be enough
-        self.multislot_names = [s.name for s in multislots]
+        self.multislot_names = []
         if forced_axes is None:
             self.multislots = multislots
         else:
@@ -44,6 +44,7 @@ class SlotTracker(object):
                 if multislot.level > 1:
                     logger.info(f'skipping slot {multislot} of {multislot.getRealOperator()}')
                     continue
+                self.multislot_names.append(multislot.name)
                 op = OperatorWrapper(
                     OpReorderAxes,
                     parent=multislot.getRealOperator().parent,
