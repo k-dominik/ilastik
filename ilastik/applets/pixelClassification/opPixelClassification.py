@@ -34,6 +34,7 @@ from lazyflow import stype
 from lazyflow.graph import Operator, InputSlot, OutputSlot, OperatorWrapper
 from lazyflow.operators import OpValueCache, OpTrainClassifierBlocked, OpClassifierPredict,\
                                OpSlicedBlockedArrayCache, OpMultiArraySlicer2, \
+                               OpBlockedArrayCache, \
                                OpPixelOperator, OpMaxChannelIndicatorOperator, OpCompressedUserLabelArray, OpFeatureMatrixCache
 import ilastik_feature_selection
 import numpy as np
@@ -553,8 +554,13 @@ class OpPredictionPipeline(OpPredictionPipelineNoCache):
         self.prediction_cache_gui.inputs["Input"].connect( self.predict.PMaps )
         self.CachedPredictionProbabilities.connect(self.prediction_cache_gui.Output )
 
+        self.prediction_cache_gui_blocked = OpBlockedArrayCache( parent=self )
+        self.prediction_cache_gui_blocked.name = "prediction_cache_gui_blocked"
+        self.prediction_cache_gui_blocked.inputs["fixAtCurrent"].connect( self.FreezePredictions )
+        self.prediction_cache_gui_blocked.inputs["Input"].connect( self.predict.PMaps )
+
         self.opConvertToUint8cached = OpPixelOperator( parent=self )
-        self.opConvertToUint8cached.Input.connect( self.prediction_cache_gui.Output )
+        self.opConvertToUint8cached.Input.connect( self.prediction_cache_gui_blocked.Output )
         self.opConvertToUint8cached.Function.setValue( lambda a: (255*a).astype(numpy.uint8) )
         self.CachedPredictionProbabilitiesUint8.connect( self.opConvertToUint8cached.Output )
 
@@ -613,8 +619,12 @@ class OpPredictionPipeline(OpPredictionPipelineNoCache):
         blockShapeY = tuple( blockDimsY[k][1] for k in axisOrder )
         blockShapeZ = tuple( blockDimsZ[k][1] for k in axisOrder )
 
+        block_blockshape = {'t': (1, 1), 'c': (100, 100), 'x': (64, 64), 'y': (64, 64), 'y': (64, 64)}
+        blocked_blockshape = tuple(block_blockshape[k][1] for k in axisOrder)
+
         self.prediction_cache_gui.BlockShape.setValue( (blockShapeX, blockShapeY, blockShapeZ) )
         self.opUncertaintyCache.BlockShape.setValue( (blockShapeX, blockShapeY, blockShapeZ) )
+        self.prediction_cache_gui_blocked.BlockShape.setValue(blocked_blockshape)
 
         assert self.opConvertToUint8.Output.meta.drange == (0,255)
         assert self.opConvertToUint8cached.Output.meta.drange == (0,255)
