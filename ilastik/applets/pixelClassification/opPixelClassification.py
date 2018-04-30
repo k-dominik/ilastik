@@ -546,7 +546,6 @@ class OpPredictionPipeline(OpPredictionPipelineNoCache):
         self.opConvertToUint8.Function.setValue( lambda a: (255*a).astype(numpy.uint8) )
         self.PredictionProbabilitiesUint8.connect( self.opConvertToUint8.Output )
 
-
         # Prediction cache for the GUI
         self.prediction_cache_gui = OpSlicedBlockedArrayCache( parent=self )
         self.prediction_cache_gui.name = "prediction_cache_gui"
@@ -554,15 +553,12 @@ class OpPredictionPipeline(OpPredictionPipelineNoCache):
         self.prediction_cache_gui.inputs["Input"].connect( self.predict.PMaps )
         self.CachedPredictionProbabilities.connect(self.prediction_cache_gui.Output )
 
-        self.prediction_cache_gui_blocked = OpBlockedArrayCache( parent=self )
-        self.prediction_cache_gui_blocked.name = "prediction_cache_gui_blocked"
-        self.prediction_cache_gui_blocked.inputs["fixAtCurrent"].connect( self.FreezePredictions )
-        self.prediction_cache_gui_blocked.inputs["Input"].connect( self.predict.PMaps )
-
-        self.opConvertToUint8cached = OpPixelOperator( parent=self )
-        self.opConvertToUint8cached.Input.connect( self.prediction_cache_gui_blocked.Output )
-        self.opConvertToUint8cached.Function.setValue( lambda a: (255*a).astype(numpy.uint8) )
-        self.CachedPredictionProbabilitiesUint8.connect( self.opConvertToUint8cached.Output )
+        # Prediction cache for the server
+        self.prediction_cache_gui_blocked_Uint8 = OpBlockedArrayCache(parent=self)
+        self.prediction_cache_gui_blocked_Uint8.name = "prediction_cache_gui_blocked_Uint8"
+        self.prediction_cache_gui_blocked_Uint8.fixAtCurrent.connect(self.FreezePredictions)
+        self.prediction_cache_gui_blocked_Uint8.Input.connect(self.opConvertToUint8.Output)
+        self.CachedPredictionProbabilitiesUint8.connect(self.prediction_cache_gui_blocked_Uint8.Output)
 
         # Also provide each prediction channel as a separate layer (for the GUI)
         self.opPredictionSlicer = OpMultiArraySlicer2( parent=self )
@@ -624,10 +620,10 @@ class OpPredictionPipeline(OpPredictionPipelineNoCache):
 
         self.prediction_cache_gui.BlockShape.setValue( (blockShapeX, blockShapeY, blockShapeZ) )
         self.opUncertaintyCache.BlockShape.setValue( (blockShapeX, blockShapeY, blockShapeZ) )
-        self.prediction_cache_gui_blocked.BlockShape.setValue(blocked_blockshape)
+        self.prediction_cache_gui_blocked_Uint8.BlockShape.setValue(blocked_blockshape)
 
         assert self.opConvertToUint8.Output.meta.drange == (0,255)
-        assert self.opConvertToUint8cached.Output.meta.drange == (0,255)
+        assert self.prediction_cache_gui_blocked_Uint8.Output.meta.drange == (0,255)
 
 class OpEnsembleMargin(Operator):
     """
