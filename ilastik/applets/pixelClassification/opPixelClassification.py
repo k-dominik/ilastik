@@ -619,7 +619,7 @@ class OpPredictionPipeline(OpPredictionPipelineNoCache):
         blockShapeY = tuple( blockDimsY[k][1] for k in axisOrder )
         blockShapeZ = tuple( blockDimsZ[k][1] for k in axisOrder )
 
-        block_blockshape = {'t': (1, 1), 'c': (100, 100), 'x': (64, 64), 'y': (64, 64), 'y': (64, 64)}
+        block_blockshape = {'t': (1, 1), 'c': (100, 100), 'x': (64, 64), 'y': (64, 64), 'z': (64, 64)}
         blocked_blockshape = tuple(block_blockshape[k][1] for k in axisOrder)
 
         self.prediction_cache_gui.BlockShape.setValue( (blockShapeX, blockShapeY, blockShapeZ) )
