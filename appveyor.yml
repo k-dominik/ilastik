@@ -5,6 +5,9 @@ environment:
   # set miniconda version explicitly
   MINICONDA: C:\Miniconda36-x64
 
+cache:
+  - '%MINICONDA%/envs/%ENV_NAME% -> appveyor.yml'
+
 
 install:
   - set DEV_PREFIX=%MINICONDA%/envs/%ENV_NAME%
