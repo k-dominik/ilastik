@@ -79,6 +79,10 @@ class ManualTrackingWorkflow( Workflow ):
         # Extra configuration for object export table (as CSV table or HDF5 table)
         opTracking = self.trackingApplet.topLevelOperator
         self.dataExportApplet.set_exporting_operator(opTracking)
+        # Hack: dataExportGui checks this in order to invoke plugin export
+        #       this does not really fix the issue, we have to decide how
+        #       to move on with manual tracking; will we allow the plugins?
+        self.dataExportApplet.postprocessCanCheckForExistingFiles = lambda: False
         self.dataExportApplet.post_process_lane_export = self.post_process_lane_export
         
         self._applets = []        
