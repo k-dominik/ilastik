@@ -170,9 +170,9 @@ class OpThresholdTwoLevels(Operator):
         
         self.CachedOutput.connect( self.opCache.Output )
         self.CleanBlocks.connect( self.opCache.CleanBlocks )
-        
-        ## Debug outputs
-        self.Smoothed.connect( self.opSmootherCache.Output )
+
+        # Debug outputs
+        self.Smoothed.connect(self.opFinalChannelSelector.Output)
         self.InputChannel.connect( self.opFinalChannelSelector.Output )
         self.SmallRegions.connect( self.opCoreThreshold.Output )
         self.FilteredSmallLabels.connect( self.opCoreFilter.Output )
