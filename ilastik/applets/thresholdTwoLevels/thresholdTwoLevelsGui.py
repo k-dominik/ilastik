@@ -99,10 +99,11 @@ class ThresholdTwoLevelsGui( LayerViewerGui ):
         for widget in self._allWatchedWidgets:
             # If the user pressed enter inside a spinbox, auto-click "Apply"
             widget.installEventFilter( self )
-        
-        self._drawer.showDebugCheckbox.stateChanged.connect( self._onShowDebugChanged )
-        self._showDebug = False
-        
+
+        self._drawer.showIntermediateLayersCheckbox.stateChanged.connect(
+            self._onShowIntermediateLayersChanged)
+        self._showIntermediateLayers = False
+
         self._updateGuiFromOperator()
         self.topLevelOperatorView.InputImage.notifyReady( bind(self._updateGuiFromOperator) )
         self.__cleanup_fns.append( partial( self.topLevelOperatorView.InputImage.unregisterUnready, bind(self._updateGuiFromOperator) ) )
@@ -282,12 +283,12 @@ class ThresholdTwoLevelsGui( LayerViewerGui ):
         #not needed, LayerViewerGui monitors op.CurOperator
         #self.updateAllLayers()
 
-    def _onShowDebugChanged(self, state):
-        if state==Qt.Checked:
-            self._showDebug = True
+    def _onShowIntermediateLayersChanged(self, state):
+        if state == Qt.Checked:
+            self._showIntermediateLayers = True
             self.updateAllLayers()
         else:
-            self._showDebug = False
+            self._showIntermediateLayers = False
             self.updateAllLayers()
 
     def eventFilter(self, watched, event):
@@ -349,14 +350,14 @@ class ThresholdTwoLevelsGui( LayerViewerGui ):
             inputChannelLayer.opacity = 0.5
             inputChannelLayer.visible = True
             inputChannelLayer.name = "Input Channel " + str(channel)
-            inputChannelLayer.setToolTip("Select input channel " + str(channel) + \
-                                            " if this prediction image contains the objects of interest.")                    
+            inputChannelLayer.setToolTip(
+                f"Select input channel {channel} if this prediction image contains the objects of interest.")
             layers.append(inputChannelLayer)
 
-        if self._showDebug:
-            #FIXME: We have to do that, because lazyflow doesn't have a way to make an operator partially ready
-            curIndex = op.CurOperator.value
-            if curIndex==1:
+        if self._showIntermediateLayers:
+            # FIXME: We have to do that, because lazyflow doesn't have a way to make an operator partially ready
+            selectedThresholdMethod = op.CurOperator.value
+            if selectedThresholdMethod == ThresholdMethod.HYSTERESIS:
                 if op.BigRegions.ready():
                     lowThresholdSrc = LazyflowSource(op.BigRegions)
                     lowThresholdLayer = ColortableLayer(lowThresholdSrc, binct)
@@ -373,8 +374,9 @@ class ThresholdTwoLevelsGui( LayerViewerGui ):
                     filteredSmallLabelsLayer.name = "After high threshold and size filter"
                     filteredSmallLabelsLayer.visible = False
                     filteredSmallLabelsLayer.opacity = 1.0
-                    filteredSmallLabelsLayer.setToolTip("Results of thresholding with the high pixel value threshold,\
-                                                         followed by the size filter")
+                    filteredSmallLabelsLayer.setToolTip(
+                        "Results of thresholding with the high pixel value threshold, "
+                        "followed by the size filter")
                     layers.append(filteredSmallLabelsLayer)
         
                 if op.SmallRegions.ready():
@@ -385,7 +387,7 @@ class ThresholdTwoLevelsGui( LayerViewerGui ):
                     highThresholdLayer.opacity = 1.0
                     highThresholdLayer.setToolTip("Results of thresholding with the high pixel value threshold")
                     layers.append(highThresholdLayer)
-            elif curIndex==0:
+            elif selectedThresholdMethod == ThresholdMethod.SIMPLE:
                 if op.BeforeSizeFilter.ready():
                     thSrc = LazyflowSource(op.BeforeSizeFilter)
                     thLayer = ColortableLayer(thSrc, ct)

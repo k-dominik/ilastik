@@ -465,7 +465,7 @@
     </widget>
    </item>
    <item>
-    <widget class="QCheckBox" name="showDebugCheckbox">
+    <widget class="QCheckBox" name="showIntermediateLayersCheckbox">
      <property name="toolTip">
       <string>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p&gt;Show intermediate computation results, such as the segmented objects after thresholding, but before size filter.&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</string>
      </property>
