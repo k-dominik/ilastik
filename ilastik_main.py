@@ -16,6 +16,8 @@ parser = argparse.ArgumentParser(description="start an ilastik workflow")
 # Common options
 parser.add_argument('--headless', help="Don't start the ilastik gui.",
                     action='store_true', default=False)
+parser.add_argument('--api', help="Attach the API to the used shell.",
+                    action='store_true', default=False)
 parser.add_argument(
     '--project', help='A project file to open on startup.', required=False)
 parser.add_argument(
