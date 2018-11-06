@@ -58,17 +58,22 @@ class WrappedSlot(object):
         self._version += 1
 
 
-class WrappedValueSlotTypeInputSlot(WrappedSlot):
+class WrappedValueSlotTypeSlot(WrappedSlot):
     def __init__(self, slot: InputSlot) -> None:
-        """Summary
+        """
+        Depending on the slot (whether it is an input or output) method getting/
+        setting is different:
+          * input slots: read/write: necessary to synchronize with the client
+          * output slots: read-only
 
         Args:
-            slot (Slot): the slot to be wrapped, level 0, or level 1
+            slot (Slot): the slot to be wrapped, leve):
+        assert isinstance(slot, InputSlot), "Only input slots support value setting!"
+l 0, or level 1
               this slot will only store values, and not request anything from
               upstream
         """
         logger.debug(f'Constructing {type(self)} for {slot}, {slot.stype}')
-        assert isinstance(slot, InputSlot)
         if not isinstance(slot.stype, ValueSlotType):
             raise ValueError(
                 f'This class only wraps ArrayLike slots. got {slot.stype}.'
@@ -79,6 +84,7 @@ class WrappedValueSlotTypeInputSlot(WrappedSlot):
         self.slot = self._slot
 
     def set_value(self, value: typing.Any, subindex: int=None):
+        assert isinstance(self.slot, InputSlot), "Only input slots support value setting!"
         if self.slot.level == 1:
             if subindex is None:
                 raise ValueError("Subindex needs to be given for multi-level-slots!")

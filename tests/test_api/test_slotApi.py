@@ -27,7 +27,7 @@ from lazyflow.graph import Graph, InputSlot, OutputSlot
 from lazyflow.operatorWrapper import OperatorWrapper
 from ilastik.shell.server.slotApi import (
     WrappedArrayLikeInputSlot, WrappedArrayLikeOutputSlot,
-    WrappedValueSlotTypeInputSlot
+    WrappedValueSlotTypeSlot
 )
 from lazyflow.stype import ArrayLike, ValueSlotType
 
@@ -36,20 +36,22 @@ class TestwrappedLevelZeroSlotValueLike(object):
     def setup(self):
         self.op_pipe = OpArrayPiper(graph=Graph())
         self.op_pipe.Input.stype = ValueSlotType(self.op_pipe.Input)
+        self.op_pipe.Output.stype = ValueSlotType(self.op_pipe.Output)
         # Sanity checks:
         assert self.op_pipe.Input.level == 0
         assert self.op_pipe.Output.level == 0
         assert type(self.op_pipe.Input.stype) == ValueSlotType
+        assert type(self.op_pipe.Input.stype) == ValueSlotType
 
     def test_emtpy_wrapping(self):
         op_pipe = self.op_pipe
-        wrapped_input_slot = WrappedValueSlotTypeInputSlot(op_pipe.Input)
+        wrapped_input_slot = WrappedValueSlotTypeSlot(op_pipe.Input)
         assert wrapped_input_slot.slot == op_pipe.Input
         assert wrapped_input_slot._version == 0
 
     def test_value_setting(self):
         op_pipe = self.op_pipe
-        wrapped_input_slot = WrappedValueSlotTypeInputSlot(op_pipe.Input)
+        wrapped_input_slot = WrappedValueSlotTypeSlot(op_pipe.Input)
         values = [
             'a value',
             1,
@@ -62,7 +64,7 @@ class TestwrappedLevelZeroSlotValueLike(object):
 
     def test_value_getting(self):
         op_pipe = self.op_pipe
-        wrapped_input_slot = WrappedValueSlotTypeInputSlot(op_pipe.Input)
+        wrapped_input_slot = WrappedValueSlotTypeSlot(op_pipe.Input)
         values = [
             'a value',
             1,
@@ -81,21 +83,28 @@ class TestwrappedMultiLevelSlotValueLike(object):
             graph=Graph()
         )
         self.op_pipe.Input.stype = ValueSlotType(self.op_pipe.Input)
+        self.op_pipe.Output.stype = ValueSlotType(self.op_pipe.Output)
         # Sanity checks:
         assert self.op_pipe.Input.level == 1
         assert self.op_pipe.Output.level == 1
         assert type(self.op_pipe.Input.stype) == ValueSlotType
+        assert type(self.op_pipe.Output.stype) == ValueSlotType
 
     def test_emtpy_wrapping(self):
         op_pipe = self.op_pipe
-        wrapped_input_slot = WrappedValueSlotTypeInputSlot(op_pipe.Input)
+        wrapped_input_slot = WrappedValueSlotTypeSlot(op_pipe.Input)
         assert wrapped_input_slot.slot == op_pipe.Input
         assert wrapped_input_slot._version == 0, (
-                f"encountered {wrapped_input_slot._version}, expected {index + 1}")
+                f"encountered {wrapped_input_slot._version}, expected 0")
 
-    def test_set_value_setting(self):
+        wrapped_output_slot = WrappedValueSlotTypeSlot(op_pipe.Output)
+        assert wrapped_output_slot.slot == op_pipe.Output
+        assert wrapped_output_slot._version == 0, (
+                f"encountered {wrapped_output_slot._version}, expected 0")
+
+    def test_value_setting(self):
         op_pipe = self.op_pipe
-        wrapped_input_slot = WrappedValueSlotTypeInputSlot(op_pipe.Input)
+        wrapped_input_slot = WrappedValueSlotTypeSlot(op_pipe.Input)
         values = [
             'a value',
             1,
@@ -108,7 +117,7 @@ class TestwrappedMultiLevelSlotValueLike(object):
 
     def test_set_value_setting_auto_resize(self):
         op_pipe = self.op_pipe
-        wrapped_input_slot = WrappedValueSlotTypeInputSlot(op_pipe.Input)
+        wrapped_input_slot = WrappedValueSlotTypeSlot(op_pipe.Input)
         values = [
             'a value',
             1,
