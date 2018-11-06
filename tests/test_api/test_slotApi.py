@@ -47,7 +47,7 @@ class TestwrappedLevelZeroSlotValueLike(object):
         assert wrapped_input_slot.slot == op_pipe.Input
         assert wrapped_input_slot._version == 0
 
-    def test_set_value_setting(self):
+    def test_value_setting(self):
         op_pipe = self.op_pipe
         wrapped_input_slot = WrappedValueSlotTypeInputSlot(op_pipe.Input)
         values = [
@@ -57,7 +57,20 @@ class TestwrappedLevelZeroSlotValueLike(object):
         for index, value in enumerate(values):
             wrapped_input_slot.set_value(value)
             assert op_pipe.Input.value == value
-            assert wrapped_input_slot._version == 0, (
+            assert wrapped_input_slot._version == index + 1, (
+                f"encountered {wrapped_input_slot._version}, expected {index + 1}")
+
+    def test_value_getting(self):
+        op_pipe = self.op_pipe
+        wrapped_input_slot = WrappedValueSlotTypeInputSlot(op_pipe.Input)
+        values = [
+            'a value',
+            1,
+        ]
+        for index, value in enumerate(values):
+            op_pipe.Input.setValue(value)
+            assert op_pipe.Input.value == value
+            assert wrapped_input_slot._version == index + 1, (
                 f"encountered {wrapped_input_slot._version}, expected {index + 1}")
 
 

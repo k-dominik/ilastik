@@ -54,6 +54,7 @@ class WrappedSlot(object):
 
     def set_dirty(self, *args):
         # TODO: handle multi-level slots
+        logger.debug(f"incrementing version of {self._slot.name}")
         self._version += 1
 
 
@@ -88,6 +89,18 @@ class WrappedValueSlotTypeInputSlot(WrappedSlot):
             slot = self.slot
 
         slot.setValue(value)
+
+    def get_value(self, subindex: int=None):
+        if self.slot.level == 1:
+            if subindex is None:
+                raise ValueError("Subindex needs to be given for multi-level-slots!")
+            if len(self.slot) >= subindex:
+                self.slot.resize(subindex + 1)
+            slot = self.slot[subindex]
+        else:
+            slot = self.slot
+
+        return slot.value
 
 
 class WrappedArrayLikeInputSlot(WrappedSlot):
