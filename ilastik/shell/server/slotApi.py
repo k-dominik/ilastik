@@ -1,5 +1,5 @@
 ###############################################################################
-#   lazyflow: data flow based lazy parallel computation framework
+#   ilastik: interactive learning and segmentation toolkit
 #
 #       Copyright (C) 2011-2018, the ilastik developers
 #                                <team@ilastik.org>

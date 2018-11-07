@@ -1,5 +1,5 @@
 ###############################################################################
-#   lazyflow: data flow based lazy parallel computation framework
+#   ilastik: interactive learning and segmentation toolkit
 #
 #       Copyright (C) 2011-2018, the ilastik developers
 #                                <team@ilastik.org>
@@ -23,6 +23,7 @@ import numpy
 import vigra
 
 from lazyflow.operators.opArrayPiper import OpArrayPiper
+from lazyflow.operators.opValuePiper import OpValuePiper
 from lazyflow.graph import Graph, InputSlot, OutputSlot
 from lazyflow.operatorWrapper import OperatorWrapper
 from ilastik.shell.server.slotApi import (
@@ -34,9 +35,7 @@ from lazyflow.stype import ArrayLike, ValueSlotType
 
 class TestwrappedLevelZeroSlotValueLike(object):
     def setup(self):
-        self.op_pipe = OpArrayPiper(graph=Graph())
-        self.op_pipe.Input.stype = ValueSlotType(self.op_pipe.Input)
-        self.op_pipe.Output.stype = ValueSlotType(self.op_pipe.Output)
+        self.op_pipe = OpValuePiper(graph=Graph())
         # Sanity checks:
         assert self.op_pipe.Input.level == 0
         assert self.op_pipe.Output.level == 0
@@ -64,26 +63,24 @@ class TestwrappedLevelZeroSlotValueLike(object):
 
     def test_value_getting(self):
         op_pipe = self.op_pipe
-        wrapped_input_slot = WrappedValueSlotTypeSlot(op_pipe.Input)
+        wrapped_output_slot = WrappedValueSlotTypeSlot(op_pipe.Output)
         values = [
             'a value',
             1,
         ]
         for index, value in enumerate(values):
             op_pipe.Input.setValue(value)
-            assert op_pipe.Input.value == value
-            assert wrapped_input_slot._version == index + 1, (
+            assert wrapped_output_slot._version == index + 1, (
                 f"encountered {wrapped_input_slot._version}, expected {index + 1}")
+            assert wrapped_output_slot.get_value() == value
 
 
 class TestwrappedMultiLevelSlotValueLike(object):
     def setup(self):
         self.op_pipe = OperatorWrapper(
-            OpArrayPiper,
+            OpValuePiper,
             graph=Graph()
         )
-        self.op_pipe.Input.stype = ValueSlotType(self.op_pipe.Input)
-        self.op_pipe.Output.stype = ValueSlotType(self.op_pipe.Output)
         # Sanity checks:
         assert self.op_pipe.Input.level == 1
         assert self.op_pipe.Output.level == 1
