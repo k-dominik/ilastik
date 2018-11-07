@@ -58,7 +58,7 @@ class WrappedSlot(object):
         self._version += 1
 
 
-class WrappedValueSlotTypeSlot(WrappedSlot):
+class WrappedValueSlot(WrappedSlot):
     def __init__(self, slot: InputSlot) -> None:
         """
         Depending on the slot (whether it is an input or output) method getting/
@@ -68,8 +68,6 @@ class WrappedValueSlotTypeSlot(WrappedSlot):
 
         Args:
             slot (Slot): the slot to be wrapped, leve):
-        assert isinstance(slot, InputSlot), "Only input slots support value setting!"
-l 0, or level 1
               this slot will only store values, and not request anything from
               upstream
         """
