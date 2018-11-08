@@ -1,7 +1,7 @@
 from lazyflow.graph import Graph, InputSlot, OutputSlot, Operator
 from lazyflow.stype import ArrayLike, ImageType, ValueSlotType
 from ilastik.applets.base.standardApplet import StandardApplet
-from ilastik.shell.server.appletApi import WrappedApplet
+from ilastik.api.appletApi import WrappedTLO
 
 
 class OpMockTLO(Operator):
@@ -12,7 +12,7 @@ class OpMockTLO(Operator):
     ArrayLikeInput = InputSlot(stype=ArrayLike)
 
     # Slot with default value
-    ValueInputDefault = InputSlot(stype=ValueSlotType, value='default_set')
+    ValueInputDefault = InputSlot(stype=ValueSlotType, value=('default_set',))
 
     # Outputs
     ValueOutput = OutputSlot(stype=ValueSlotType)
@@ -20,12 +20,11 @@ class OpMockTLO(Operator):
     ArrayLikeOutput = OutputSlot(stype=ArrayLike)
 
     def setupOutputs(self):
-        self.ImageTypeOutput.meta.assignFrom(ImageTypeInput.meta)
-        self.ArrayLikeOutput.meta.assignFrom(ArrayLikeInput.meta)
+        self.ImageTypeOutput.meta.assignFrom(self.ImageTypeInput.meta)
+        self.ArrayLikeOutput.meta.assignFrom(self.ArrayLikeInput.meta)
         self.ValueOutput.setValue(self.ValueInput.value)
 
     def propagateDirty(self, slot, subindex, roi):
-        key = roi.toSlice()
         # Check for proper name because subclasses may define extra inputs.
         # (but decline to override notifyDirty)
         self.ImageTypeOutput.setDirty(slice(None))
@@ -41,9 +40,9 @@ class OpMockTLO(Operator):
 
 
 class MockApplet(StandardApplet):
-    def __init__(self):
+    def __init__(self, name, workflow):
         self._topLevelOperator = OpMockTLO(graph=Graph())
-        super().__init__(name='MockApplet')
+        super().__init__(name, workflow)
 
     @property
     def singleLaneOperatorClass(self):
@@ -64,9 +63,17 @@ class MockApplet(StandardApplet):
         return ['ValueInputBroad']
 
 
+class MockWorkflow(Operator):
+    def __init__(self):
+        super().__init__(graph=Graph())
+
+
 class TestAppletWrapping(object):
     def setup(self):
-        self.applet = MockApplet()
+        self.workflow = MockWorkflow()
+        self.applet = MockApplet(name='MockApplet', workflow=self.workflow)
 
     def test_appletWrapping(self):
-        wrapped_applet = WrappedApplet(self.applet)
+        wrapped_tlo = WrappedTLO(self.applet)
+
+        assert wrapped_tlo.name == self.applet.name
