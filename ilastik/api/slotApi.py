@@ -49,6 +49,11 @@ class WrappedSlot(object):
             self._slot.notifyDirty(self.set_dirty)
             self._slot.notifyValueChanged(self.set_dirty)
         else:
+            # initialize slots that are already there:
+            for subslot in self._slot:
+                assert subslot.level == 0
+                subslot.notifyDirty(self.set_dirty)
+                subslot.notifyValueChanged(self.set_dirty)
             self._slot.notifyInserted(doMulti)
             self._slot.notifyRemoved(self.set_dirty)
 
