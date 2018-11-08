@@ -27,7 +27,7 @@ import numpy
 from lazyflow.slot import Slot, InputSlot, OutputSlot
 from lazyflow.operators import OpReorderAxes
 from lazyflow.operatorWrapper import OperatorWrapper
-from lazyflow.stype import ArrayLike, ValueSlotType
+from lazyflow.stype import ArrayLike, ValueLike
 import vigra
 
 
@@ -77,7 +77,7 @@ class WrappedValueSlot(WrappedSlot):
               upstream
         """
         logger.debug(f'Constructing {type(self)} for {slot}, {slot.stype}')
-        if not isinstance(slot.stype, ValueSlotType):
+        if not isinstance(slot.stype, ValueLike):
             raise ValueError(
                 f'This class only wraps ArrayLike slots. got {slot.stype}.'
             )

@@ -1,21 +1,21 @@
 from lazyflow.graph import Graph, InputSlot, OutputSlot, Operator
-from lazyflow.stype import ArrayLike, ImageType, ValueSlotType
+from lazyflow.stype import ArrayLike, ImageType, ValueLike
 from ilastik.applets.base.standardApplet import StandardApplet
 from ilastik.api.appletApi import WrappedTLO
 
 
 class OpMockTLO(Operator):
     # Inputs
-    ValueInput = InputSlot(stype=ValueSlotType)
-    ValueInputBroad = InputSlot(stype=ValueSlotType)
+    ValueInput = InputSlot(stype=ValueLike)
+    ValueInputBroad = InputSlot(stype=ValueLike)
     ImageTypeInput = InputSlot(stype=ImageType)
     ArrayLikeInput = InputSlot(stype=ArrayLike)
 
     # Slot with default value
-    ValueInputDefault = InputSlot(stype=ValueSlotType, value=('default_set',))
+    ValueInputDefault = InputSlot(stype=ValueLike, value=('default_set',))
 
     # Outputs
-    ValueOutput = OutputSlot(stype=ValueSlotType)
+    ValueOutput = OutputSlot(stype=ValueLike)
     ImageTypeOutput = OutputSlot(stype=ImageType)
     ArrayLikeOutput = OutputSlot(stype=ArrayLike)
 

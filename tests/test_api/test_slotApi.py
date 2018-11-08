@@ -31,7 +31,7 @@ from ilastik.api.slotApi import (
     WrappedArrayLikeInputSlot, WrappedArrayLikeOutputSlot,
     WrappedValueSlot
 )
-from lazyflow.stype import ArrayLike, ValueSlotType
+from lazyflow.stype import ArrayLike, ValueLike
 
 
 class TestwrappedLevelZeroSlotValueLike(object):
@@ -40,8 +40,8 @@ class TestwrappedLevelZeroSlotValueLike(object):
         # Sanity checks:
         assert self.op_pipe.Input.level == 0
         assert self.op_pipe.Output.level == 0
-        assert type(self.op_pipe.Input.stype) == ValueSlotType
-        assert type(self.op_pipe.Input.stype) == ValueSlotType
+        assert type(self.op_pipe.Input.stype) == ValueLike
+        assert type(self.op_pipe.Input.stype) == ValueLike
 
     def test_emtpy_wrapping(self):
         op_pipe = self.op_pipe
@@ -85,8 +85,8 @@ class TestwrappedMultiLevelSlotValueLike(object):
         # Sanity checks:
         assert self.op_pipe.Input.level == 1
         assert self.op_pipe.Output.level == 1
-        assert type(self.op_pipe.Input.stype) == ValueSlotType
-        assert type(self.op_pipe.Output.stype) == ValueSlotType
+        assert type(self.op_pipe.Input.stype) == ValueLike
+        assert type(self.op_pipe.Output.stype) == ValueLike
 
     def test_emtpy_wrapping(self):
         op_pipe = self.op_pipe
