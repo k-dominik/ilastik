@@ -19,6 +19,7 @@
 # This information is also available on the ilastik web site at:
 #          http://ilastik.org/license/
 ###############################################################################
+import itertools
 import numpy
 import vigra
 
@@ -26,7 +27,7 @@ from lazyflow.operators.opArrayPiper import OpArrayPiper
 from lazyflow.operators.opValuePiper import OpValuePiper
 from lazyflow.graph import Graph, InputSlot, OutputSlot
 from lazyflow.operatorWrapper import OperatorWrapper
-from ilastik.shell.server.slotApi import (
+from ilastik.api.slotApi import (
     WrappedArrayLikeInputSlot, WrappedArrayLikeOutputSlot,
     WrappedValueSlot
 )
@@ -57,7 +58,7 @@ class TestwrappedLevelZeroSlotValueLike(object):
         ]
         for index, value in enumerate(values):
             wrapped_input_slot.set_value(value)
-            assert op_pipe.Input.value == value
+            assert op_pipe.Input.value == value, f"{op_pipe.Input.value[0]}: {value}"
             assert wrapped_input_slot._version == index + 1, (
                 f"encountered {wrapped_input_slot._version}, expected {index + 1}")
 
@@ -137,9 +138,11 @@ class TestWrappedMultilevelSlotArrayLike(object):
         )
 
         self.op_pipe.Input.stype = ArrayLike(self.op_pipe.Input)
+        self.op_pipe.Output.stype = ArrayLike(self.op_pipe.Output)
 
         # Sanity checks
         assert type(self.op_pipe.Input.stype) == ArrayLike
+        assert type(self.op_pipe.Output.stype) == ArrayLike
         assert self.op_pipe.Input.level == 1
         assert self.op_pipe.Output.level == 1
         assert len(self.op_pipe.Input) == 0
@@ -201,7 +204,68 @@ class TestWrappedMultilevelSlotArrayLike(object):
         expected_output = numpy.zeros((5, 2, 10, 40, 70), dtype=numpy.uint8)
         expected_output[slicing] = data_slice
         numpy.testing.assert_array_equal(output, expected_output)
-
+        assert wrapped_input_slot._version == 1, (
+            f"Expected 1, but got {wrapped_input_slot._version}")
         # get output from wrapped slot
         wrapped_output = wrapped_output_slot.get(slicing=slicing, subindex=0)
         numpy.testing.assert_array_equal(wrapped_output, data_slice)
+
+    def test_slot_multilevel_wrapping_w_content_axisorder(self):
+        op_pipe = self.op_pipe
+        data = numpy.random.randint(
+            0, 255, (5, 2, 10, 40, 70), dtype=numpy.uint8)
+
+        default_axisorder = 'tczyx'
+        op_pipe.Input.resize(2)
+        assert len(op_pipe.Input) == 2
+        assert len(op_pipe.Input) == 2
+
+        op_pipe.Input[0].meta.axistags = vigra.defaultAxistags(default_axisorder)
+        op_pipe.Input[0].setValue(numpy.zeros((5, 2, 10, 40, 70), dtype=numpy.uint8))
+
+        wrapped_input_slot = WrappedArrayLikeInputSlot(
+            op_pipe.Input, incoming_axis_order=default_axisorder)
+        wrapped_output_slot = WrappedArrayLikeOutputSlot(
+            op_pipe.Output, forced_axisorder=default_axisorder)
+
+        assert wrapped_input_slot.slot.level == 1
+        assert wrapped_output_slot.slot.level == 1
+        assert wrapped_output_slot.axis_order == default_axisorder
+        assert wrapped_input_slot.axis_order == default_axisorder
+
+        slicing_dict = {
+            't': slice(0, 1),
+            'c': slice(0, 2),
+            'z': slice(0, 10),
+            'y': slice(0, 20),
+            'x': slice(0, 30)
+        }
+
+        original_slicing = tuple((slicing_dict[x] for x in default_axisorder))
+
+        axisorders = ("".join(x) for x in itertools.permutations(default_axisorder))
+        data_slice = data[original_slicing]
+
+        tagged_data_slice = data_slice.view(vigra.VigraArray)
+        tagged_data_slice.axistags = vigra.defaultAxistags(default_axisorder)
+
+        expected_output = numpy.zeros((5, 2, 10, 40, 70), dtype=numpy.uint8)
+        expected_output[original_slicing] = data_slice
+
+        for index, axisorder in enumerate(axisorders):
+            slicing = tuple((slicing_dict[x] for x in axisorder))
+            transposed_data = tagged_data_slice.withAxes(*axisorder)
+            wrapped_input_slot.write_into(
+                slicing=slicing,
+                data=transposed_data.view(numpy.ndarray),
+                subindex=0,
+                incoming_axis_order=axisorder
+            )
+
+            assert wrapped_input_slot._version == index + 1, (
+                f"Expected {index + 1}, but got {wrapped_input_slot._version}")
+            assert wrapped_input_slot._version == wrapped_output_slot._version, (
+                f"Expected {wrapped_output_slot._version}, but got {wrapped_input_slot._version}")
+
+            output = wrapped_output_slot.get(original_slicing, subindex=0)
+            numpy.testing.assert_array_equal(output, data_slice)

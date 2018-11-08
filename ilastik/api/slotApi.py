@@ -97,7 +97,7 @@ class WrappedValueSlot(WrappedSlot):
         else:
             slot = self.slot
 
-        slot.setValue(value)
+        slot.setValue((value))
 
     def get_value(self, subindex: int=None):
         if self.slot.level == 1:
@@ -144,6 +144,9 @@ class WrappedArrayLikeInputSlot(WrappedSlot):
             incoming_axis_order: str=None) -> None:
         """Write data into slot
 
+        Super special case for scribble annotations, should not be used somewhere
+        else.
+
         Args:
             slicing (typing.Tuple[slice]): slicing for each of the axes. Length
               must equal self.incoming_axis_order, or, if supplied,
@@ -177,7 +180,8 @@ class WrappedArrayLikeInputSlot(WrappedSlot):
             if k in axis_order:
                 transposedSlicing += (taggedSlicing[k],)
         logger.debug(f'transposedSlicing: {transposedSlicing}')
-        slot[transposedSlicing] = transposedArray.view(numpy.ndarray)
+        write_view = transposedArray.view(numpy.ndarray)
+        slot[transposedSlicing] = write_view
 
 
 class WrappedArrayLikeOutputSlot(WrappedSlot):
@@ -224,7 +228,9 @@ class WrappedArrayLikeOutputSlot(WrappedSlot):
         Args:
             slicing (Typing.Tuple[slice]): Description
             subindex (int, optional): Description
-            outgoing_axis_order (str, optional): Description
+            outgoing_axis_order (str, optional): Description, for now not supported
+
+        # TODO: implement outgoing axis order
 
         Raises:
             NotImplementedError: Description
