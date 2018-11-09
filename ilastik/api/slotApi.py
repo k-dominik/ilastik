@@ -34,8 +34,17 @@ import vigra
 logger = logging.getLogger(__name__)
 
 
+class WrappingException(Exception):
+    pass
+
+
 class WrappedSlot(object):
     def __init__(self, slot: Slot) -> None:
+        if isinstance(slot, InputSlot):
+            if slot.upstream_slot is not None:
+                raise WrappingException(
+                    f"slot {slot.name} is already connected - connected slots are not wrapped.")
+
         self._slot = slot
         self._version = 0
 
@@ -64,7 +73,7 @@ class WrappedSlot(object):
 
 
 class WrappedValueSlot(WrappedSlot):
-    def __init__(self, slot: InputSlot) -> None:
+    def __init__(self, slot: Slot) -> None:
         """
         Depending on the slot (whether it is an input or output) method getting/
         setting is different:
@@ -82,6 +91,7 @@ class WrappedValueSlot(WrappedSlot):
                 f'This class only wraps ArrayLike slots. got {slot.stype}.'
             )
         assert slot.level == 0 or slot.level == 1
+
         super().__init__(slot)
         # need to do any magic before assigning it?
         self.slot = self._slot
