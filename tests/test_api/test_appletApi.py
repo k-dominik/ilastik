@@ -1,6 +1,11 @@
+import numpy
+
+import vigra
+
 from lazyflow.graph import Graph, InputSlot, OutputSlot, Operator
 from lazyflow.stype import ArrayLike, ImageType, ValueLike
 from lazyflow.operators import OpArrayPiper
+from lazyflow.operatorWrapper import OperatorWrapper
 from ilastik.applets.base.standardApplet import StandardApplet
 from ilastik.api.appletApi import WrappedTLO
 from ilastik.api.slotApi import (
@@ -87,6 +92,18 @@ class TestAppletWrapping(object):
     def setup(self):
         self.workflow = MockWorkflow()
         self.applet = MockApplet(name='MockApplet', workflow=self.workflow)
+        graph = self.applet.topLevelOperator.graph
+        data = numpy.random.randint(0, 255, (1, 2, 3, 4, 5), dtype='uint8')
+        self.opPiper1 = OperatorWrapper(
+            OpArrayPiper,
+            parent=self.workflow
+        )
+
+        self.opPiper1.Input.meta.axistags = vigra.defaultAxistags('tczyx')
+        self.opPiper1.Input.resize(1)
+        self.opPiper1.Input[0].setValue(data)
+        assert "".join(self.opPiper1.Input.meta.getAxisKeys()) == 'tczyx', f"{self.opPiper1.Input.meta.getAxisKeys()}"
+        self.applet.topLevelOperator.ImageTypeInputConnected.connect(self.opPiper1.Output)
 
     def test_appletWrapping(self):
         incoming_axis_order = 'tczyx'
@@ -122,4 +139,6 @@ class TestAppletWrapping(object):
 
         assert not any(x.lower().find("arraylike") != -1 for x in output_slots), (
             "Should not wrap plain ArrayLike slots.")
+
+        assert "ImageTypeInputConnected" not in input_slots, f"Connected input slots shall not be wrapped"
 
