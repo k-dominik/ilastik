@@ -1,5 +1,4 @@
 """Mediates between ilastikServerShell and ilastikServerAPI"""
-from __future__ import print_function, division
 import logging
 import collections
 import copy
@@ -9,7 +8,7 @@ import numpy
 
 from ilastik.applets.dataSelection.opDataSelection import DatasetInfo
 from ilastik.shell.server.ilastikServerShell import ServerShell
-from ilastik.api.appletApi import WrappedApplet, Applets
+from ilastik.api.appletApi import WrappedTLO, WrappedApplets
 from ilastik.applets.batchProcessing.batchProcessingApplet import BatchProcessingApplet
 from ilastik.applets.dataSelection.dataSelectionApplet import DataSelectionApplet
 from ilastik.applets.dataSelection.opDataSelection import DatasetInfo
@@ -56,8 +55,9 @@ class _IlastikAPI(object):
             project_path (str): path to project
         """
         super().__init__()
+        logger.debug('Initializing API')
         self._server_shell: ServerShell = None
-        self._wrapped_applets: typing.Dict[str, WrappedApplet] = None
+        self._wrapped_applets: WrappedApplets = None
         self.available_workflows: typing.list[typing.Tuple[Workfklow, str, str]] = \
             list(getAvailableWorkflows())
         self._input_axis_order = input_axis_order
@@ -152,10 +152,13 @@ class _IlastikAPI(object):
             return
 
         applets = self._server_shell.applets
-        self._wrapped_applets = Applets(applets, self._input_axis_order, self._output_axis_order)
-        self.initialize_voxel_server()
+        self._wrapped_applets = WrappedApplets(
+            applets,
+            self._input_axis_order,
+            self._output_axis_order)
 
     def add_dataset(self, file_name: str) -> int:
+        # TODO: should actually use the wrapped thingies! -man...
         info = DatasetInfo()
         info.filePath = file_name
 
@@ -164,8 +167,6 @@ class _IlastikAPI(object):
         n_lanes = len(opDataSelection.DatasetGroup)
         opDataSelection.DatasetGroup.resize(n_lanes + 1)
         opDataSelection.DatasetGroup[n_lanes][0].setValue(info)
-
-        # self.initialize_voxel_server()
         return n_lanes
 
     @property
@@ -181,7 +182,10 @@ class _IlastikAPI(object):
         self._wrapped_applets = None
 
     def get_structured_info(self):
-        pass
+        dataset_names = self._wrapped_applets.dataset_names
+        json_states = [self.applets.get_states(i) for i, _ in enumerate(dataset_names)]
+        return (dataset_names, json_states)
+
 
 class IlastikAPI(_IlastikAPI):
     """
