@@ -2,6 +2,7 @@ import logging
 import typing
 
 from ilastik.api.slotApi import (
+    WrappingException,
     WrappedArrayLikeInputSlot, WrappedArrayLikeOutputSlot,
     WrappedValueSlot, WrappedSlot
 )
@@ -54,11 +55,58 @@ class WrappedTLO(object):
         self._applet = applet
         self.wrap_slots()
 
-    def wrap_slots(self):
+    def wrap_slots(self) -> None:
+        tlo = self._applet.topLevelOperator
+        assert tlo is not None, "applet's top level-operator may not be none."
+
+        input_slots = collections.OrderedDict()
+        for input_slot_name, input_slot in tlo.inputs.items():
+            wrapped_slot = None
+            try:
+                if isinstance(input_slot.stype, stype.ImageType):
+                    wrapped_slot = WrappedArrayLikeInputSlot(
+                        input_slot,
+                        incoming_axis_order=self._input_axis_order
+                    )
+                elif isinstance(input_slot.stype, stype.ValueLike):
+                    wrapped_slot = WrappedValueSlot(input_slot)
+            except WrappingException as e:
+                logger.debug(f"Did not wrap input slot {input_slot_name} because of {e}")
+                continue
+
+            if wrapped_slot is not None:
+                assert input_slot_name not in input_slots
+                input_slots[input_slot_name] = {
+                    'slot': wrapped_slot
+                }
+
+        output_slots = collections.OrderedDict()
+        for output_slot_name, output_slot in tlo.outputs.items():
+            wrapped_slot = None
+            if isinstance(output_slot.stype, stype.ImageType):
+                wrapped_slot = WrappedArrayLikeOutputSlot(
+                    output_slot, forced_axisorder=self._output_axis_order)
+            elif isinstance(output_slot.stype, stype.ValueLike):
+                wrapped_slot = WrappedValueSlot(
+                    output_slot)
+
+            if wrapped_slot is not None:
+                assert output_slot_name not in output_slots
+                output_slots[output_slot_name] = {
+                    'slot': wrapped_slot
+                }
+
+        self._input_slots = input_slots
+        self._output_slots = output_slots
+
+    def get_wrapped_slots(self) -> typing.Dict[str, WrappedSlot]:
         tlo = self._applet.topLevelOperator
         if tlo is None:
             return {'input_slots': None, 'output_slots': None}
 
+        return {
+            'input_slots': self._input_slots,
+            'output_slots': self._output_slots}
 
     @property
     def name(self):
