@@ -71,6 +71,13 @@ class WrappedSlot(object):
         logger.debug(f"incrementing version of {self._slot.name}")
         self._version += 1
 
+    @property
+    def name(self):
+        return self._slot.name
+
+    def to_dict(self):
+        raise NotImplementedError
+
 
 class WrappedValueSlot(WrappedSlot):
     def __init__(self, slot: Slot) -> None:
@@ -120,6 +127,32 @@ class WrappedValueSlot(WrappedSlot):
             slot = self.slot
 
         return slot.value
+
+    def to_dict(self, subindex: int=None):
+        if self.slot.level == 1:
+            if subindex is None:
+                raise ValueError("Subindex needs to be given for multi-level-slots!")
+            slot = self.slot[subindex]
+        else:
+            slot = self.slot
+
+        is_input = isinstance(self.slot, InputSlot)
+        slot_type = (is_input and 'value input') or 'value output'
+        if slot.ready():
+            return {
+                'slot_type': slot_type,
+                'name': slot.name,
+                'dtype': repr(type(slot.value)),
+                'version': self._version,
+                'ready': slot.ready()
+            }
+        else:
+            return {
+                'slot_type': slot_type,
+                'name': slot.name,
+                'version': self._version,
+                'ready': slot.ready()
+            }
 
 
 class WrappedArrayLikeInputSlot(WrappedSlot):
@@ -193,6 +226,32 @@ class WrappedArrayLikeInputSlot(WrappedSlot):
         write_view = transposedArray.view(numpy.ndarray)
         slot[transposedSlicing] = write_view
 
+    def to_dict(self, subindex: int=None):
+        if self.slot.level == 1:
+            if subindex is None:
+                raise ValueError("Subindex needs to be given for multi-level-slots!")
+            slot = self.slot[subindex]
+        else:
+            slot = self.slot
+        if slot.ready():
+            return {
+                'slot_type': 'input',
+                'name': slot.name,
+                'axes': self.axis_order,
+                'dtype': slot.meta.dtype.__name__,
+                'shape': slot.meta.shape,
+                'version': self._version,
+                'ready': slot.ready()
+            }
+        else:
+            return {
+                'slot_type': 'input',
+                'name': slot.name,
+                'axes': self.axis_order,
+                'version': self._version,
+                'ready': slot.ready()
+            }
+
 
 class WrappedArrayLikeOutputSlot(WrappedSlot):
     def __init__(self, slot: OutputSlot, forced_axisorder: str='tczyx') -> None:
@@ -260,3 +319,29 @@ class WrappedArrayLikeOutputSlot(WrappedSlot):
                 raise NotImplementedError
 
         return slot[slicing].wait()
+
+    def to_dict(self, subindex: int=None):
+        if self.slot.level == 1:
+            if subindex is None:
+                raise ValueError("Subindex needs to be given for multi-level-slots!")
+            slot = self.slot[subindex]
+        else:
+            slot = self.slot
+        if slot.ready():
+            return {
+                'slot_type': 'output',
+                'name': slot.name,
+                'axes': self.axis_order,
+                'dtype': slot.meta.dtype.__name__,
+                'shape': slot.meta.shape,
+                'version': self._version,
+                'ready': slot.ready()
+            }
+        else:
+            return {
+                'slot_type': 'output',
+                'name': slot.name,
+                'axes': self.axis_order,
+                'version': self._version,
+                'ready': slot.ready()
+            }
