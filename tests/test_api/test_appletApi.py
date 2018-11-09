@@ -142,3 +142,40 @@ class TestAppletWrapping(object):
 
         assert "ImageLikeInputConnected" not in input_slots, f"Connected input slots shall not be wrapped"
 
+    def test_dataAccess(self):
+
+        data = numpy.random.randint(0, 255, (1, 2, 3, 4, 5), dtype='uint8')
+        op_pipe1 = OperatorWrapper(
+            OpArrayPiper,
+            parent=self.workflow
+        )
+
+        op_pipe1.Input.resize(1)
+        op_pipe1.Input[0].meta.axistags = vigra.defaultAxistags('tczyx')
+        op_pipe1.Input[0].setValue(data)
+        assert "".join(op_pipe1.Input[0].meta.getAxisKeys()) == 'tczyx', f"{op_pipe1.Input.meta.getAxisKeys()}"
+        self.applet.topLevelOperator.ArrayLikeInput.connect(op_pipe1.Output)
+
+        self.applet.topLevelOperator.ImageLikeInput[0].meta.axistags = vigra.defaultAxistags('tczyx')
+        self.applet.topLevelOperator.ImageLikeInput[0].setValue(numpy.zeros_like(data))
+
+        incoming_axis_order = 'tczyx'
+        outgoing_axis_order = 'tczyx'
+        wrapped_tlo = WrappedTLO(
+            self.applet,
+            input_axis_order=incoming_axis_order,
+            output_axis_order=outgoing_axis_order
+        )
+
+        assert wrapped_tlo.input_slots['ValueInputBroad']['slot'].get_value() == 'test', (
+            f"expected 'test', got {wrapped_tlo.input_slots['ValueInputBroad']['slot'].get_value()}")
+
+        wrapped_tlo.input_slots['ValueInput']['slot'].set_value(value='index 0', subindex=0)
+        check_value = wrapped_tlo.input_slots['ValueInput']['slot'].get_value(subindex=0)
+
+        assert check_value == 'index 0', (
+            f"expected 'index 0', got {check_value}")
+
+        piped_value = wrapped_tlo.output_slots['ValueOutput']['slot'].get_value(subindex=0)
+        assert piped_value == 'index 0', (
+            f"expected 'index 0', got {check_value}")
