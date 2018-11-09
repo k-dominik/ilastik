@@ -26,6 +26,7 @@ import sys
 # lazyflow
 from lazyflow.graph import Operator, InputSlot, OutputSlot
 from lazyflow.roi import roiToSlice
+from lazyflow import stype
 from lazyflow.operators import OpSlicedBlockedArrayCache
 from lazyflow.operators import OpPixelFeaturesPresmoothed
 from lazyflow.operators import OpReorderAxes, OperatorWrapper
@@ -73,11 +74,11 @@ class OpFeatureSelectionNoCache(Operator):
     InputImage = InputSlot()
 
     # The following input slots are applied uniformly to all input images
-    SelectionMatrix = InputSlot()  # A matrix of bools indicating which features to output
-    FeatureIds = InputSlot(value=getFeatureIdOrder())   # The list of features to compute
-    Scales = InputSlot(value=defaultScales)             # The list of scales to use when computing features
+    SelectionMatrix = InputSlot(stype=stype.ValueLike)  # A matrix of bools indicating which features to output
+    FeatureIds = InputSlot(value=getFeatureIdOrder(), stype=stype.ImageLike)   # The list of features to compute
+    Scales = InputSlot(value=defaultScales, stype=stype.ImageLike)             # The list of scales to use when computing features
     # A list of flags to indicate weather to use a 2d (xy) or a 3d filter for each scale in Scales
-    ComputeIn2d = InputSlot(value=[])
+    ComputeIn2d = InputSlot(value=[], stype=stype.ImageLike)
     # The SelectionMatrix rows correspond to feature types in the order specified by the FeatureIds input.
     #  (See OpPixelFeaturesPresmoothed for the available feature types.)
     # The SelectionMatrix columns correspond to the scales provided in the Scales input,
@@ -88,7 +89,7 @@ class OpFeatureSelectionNoCache(Operator):
     # Features are presented in the channels of the output image
     # Output can be optionally accessed via an internal cache.
     # (Training a classifier benefits from caching, but predicting with an existing classifier does not.)
-    OutputImage = OutputSlot()
+    OutputImage = OutputSlot(stype=stype.ImageLike)
 
     # For the GUI, we also provide each feature as a separate slot in this multislot
     FeatureLayers = OutputSlot(level=1)

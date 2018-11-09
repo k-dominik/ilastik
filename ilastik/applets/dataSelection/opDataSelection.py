@@ -27,6 +27,7 @@ import copy
 
 from lazyflow.graph import Operator, InputSlot, OutputSlot, OperatorWrapper
 from lazyflow.metaDict import MetaDict
+from lazyflow import stype
 from lazyflow.operators.ioOperators import (
     OpStreamingHdf5Reader, OpStreamingHdf5SequenceReaderS, OpInputDataReader
 )
@@ -512,10 +513,10 @@ class OpDataSelection(Operator):
 
 class OpDataSelectionGroup(Operator):
     # Inputs
-    ProjectFile = InputSlot(stype='object', optional=True)
-    ProjectDataGroup = InputSlot(stype='string', optional=True)
-    WorkingDirectory = InputSlot(stype='filestring')
-    DatasetRoles = InputSlot(stype='object')
+    ProjectFile = InputSlot(stype=stype.ValueLike, optional=True)  # object
+    ProjectDataGroup = InputSlot(stype=stype.ValueLike, optional=True)  # string
+    WorkingDirectory = InputSlot(stype=stype.ValueLike)  # filestring
+    DatasetRoles = InputSlot(stype=stype.ValueLike)  # object
 
     # Must mark as optional because not all subslots are required.
     DatasetGroup = InputSlot(stype='object', level=1, optional=True)
@@ -526,7 +527,7 @@ class OpDataSelectionGroup(Operator):
     # These output slots are provided as a convenience, since otherwise it is tricky to create a lane-wise multislot of
     # level-1 for only a single role.
     # (It can be done, but requires OpTransposeSlots to invert the level-2 multislot indexes...)
-    Image = OutputSlot()  # The first dataset. Equivalent to ImageGroup[0]
+    Image = OutputSlot(stype=stype.ImageLike)  # The first dataset. Equivalent to ImageGroup[0]
     Image1 = OutputSlot()  # The second dataset. Equivalent to ImageGroup[1]
     Image2 = OutputSlot()  # The third dataset. Equivalent to ImageGroup[2]
     AllowLabels = OutputSlot(stype='bool')  # Pulled from the first dataset only.
@@ -536,7 +537,7 @@ class OpDataSelectionGroup(Operator):
     # Must be the LAST slot declared in this class.
     # When the shell detects that this slot has been resized,
     #  it assumes all the others have already been resized.
-    ImageName = OutputSlot()  # Name of the first dataset is used.  Other names are ignored.
+    ImageName = OutputSlot(stype=stype.ValueLike)  # Name of the first dataset is used.  Other names are ignored.
 
     def __init__(self, forceAxisOrder=None, *args, **kwargs):
         super(OpDataSelectionGroup, self).__init__(*args, **kwargs)

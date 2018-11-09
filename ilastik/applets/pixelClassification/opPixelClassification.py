@@ -36,6 +36,7 @@ from lazyflow.operators import OpValueCache, OpTrainClassifierBlocked, OpClassif
                                OpPixelOperator, OpMaxChannelIndicatorOperator, OpCompressedUserLabelArray, OpFeatureMatrixCache
 import ilastik_feature_selection
 import numpy as np
+from lazyflow import stype
 
 from lazyflow.classifiers import ParallelVigraRfLazyflowClassifierFactory
 
@@ -58,7 +59,7 @@ class OpPixelClassification( Operator ):
     InputImages = InputSlot(level=1) # Original input data.  Used for display only.
     PredictionMasks = InputSlot(level=1, optional=True) # Routed to OpClassifierPredict.PredictionMask.  See there for details.
 
-    LabelInputs = InputSlot(optional = True, level=1) # Input for providing label data from an external source
+    LabelInputs = InputSlot(optional = True, level=1, stype=stype.ImageLike) # Input for providing label data from an external source
     
     FeatureImages = InputSlot(level=1) # Computed feature images (each channel is a different feature)
     CachedFeatureImages = InputSlot(level=1) # Cached feature data.
@@ -68,8 +69,8 @@ class OpPixelClassification( Operator ):
 
     PredictionsFromDisk = InputSlot(optional=True, level=1)
 
-    PredictionProbabilities = OutputSlot(level=1) # Classification predictions (via feature cache for interactive speed)
-    PredictionProbabilitiesUint8 = OutputSlot(level=1) # Same thing, but converted to uint8 first
+    PredictionProbabilities = OutputSlot(level=1, stype=stype.ImageLike) # Classification predictions (via feature cache for interactive speed)
+    PredictionProbabilitiesUint8 = OutputSlot(level=1, stype=stype.ImageLike) # Same thing, but converted to uint8 first
 
     PredictionProbabilityChannels = OutputSlot(level=2) # Classification predictions, enumerated by channel
     SegmentationChannels = OutputSlot(level=2) # Binary image of the final selections.
@@ -78,23 +79,23 @@ class OpPixelClassification( Operator ):
     NonzeroLabelBlocks = OutputSlot(level=1) # A list if slices that contain non-zero label values
     Classifier = OutputSlot() # We provide the classifier as an external output for other applets to use
 
-    CachedPredictionProbabilities = OutputSlot(level=1) # Classification predictions (via feature cache AND prediction cache)
+    CachedPredictionProbabilities = OutputSlot(level=1, stype=stype.ImageLike) # Classification predictions (via feature cache AND prediction cache)
 
-    HeadlessPredictionProbabilities = OutputSlot(level=1) # Classification predictions ( via no image caches (except for the classifier itself )
-    HeadlessUint8PredictionProbabilities = OutputSlot(level=1) # Same as above, but 0-255 uint8 instead of 0.0-1.0 float32
-    HeadlessUncertaintyEstimate = OutputSlot(level=1) # Same as uncertaintly estimate, but does not rely on cached data.
+    HeadlessPredictionProbabilities = OutputSlot(level=1, stype=stype.ImageLike) # Classification predictions ( via no image caches (except for the classifier itself )
+    HeadlessUint8PredictionProbabilities = OutputSlot(level=1, stype=stype.ImageLike) # Same as above, but 0-255 uint8 instead of 0.0-1.0 float32
+    HeadlessUncertaintyEstimate = OutputSlot(level=1, stype=stype.ImageLike) # Same as uncertaintly estimate, but does not rely on cached data.
 
-    UncertaintyEstimate = OutputSlot(level=1)
+    UncertaintyEstimate = OutputSlot(level=1, stype=stype.ImageLike)
     
-    SimpleSegmentation = OutputSlot(level=1) # For debug, for now
+    SimpleSegmentation = OutputSlot(level=1, stype=stype.ImageLike) # For debug, for now
 
     # GUI-only (not part of the pipeline, but saved to the project)
-    LabelNames = OutputSlot()
-    LabelColors = OutputSlot()
-    PmapColors = OutputSlot()
-    Bookmarks = OutputSlot(level=1)
+    LabelNames = OutputSlot(stype=stype.ValueLike)
+    LabelColors = OutputSlot(stype=stype.ValueLike)
+    PmapColors = OutputSlot(stype=stype.ValueLike)
+    Bookmarks = OutputSlot(level=1, stype=stype.ValueLike)
 
-    NumClasses = OutputSlot()
+    NumClasses = OutputSlot(stype=stype.ValueLike)
 
     def setupOutputs(self):
         self.LabelNames.meta.dtype = object
