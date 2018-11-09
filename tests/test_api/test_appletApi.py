@@ -3,7 +3,7 @@ import numpy
 import vigra
 
 from lazyflow.graph import Graph, InputSlot, OutputSlot, Operator
-from lazyflow.stype import ArrayLike, ImageType, ValueLike
+from lazyflow.stype import ArrayLike, ImageLike, ValueLike
 from lazyflow.operators import OpArrayPiper
 from lazyflow.operatorWrapper import OperatorWrapper
 from ilastik.applets.base.standardApplet import StandardApplet
@@ -16,16 +16,17 @@ from ilastik.api.slotApi import (
 class OpMockTLO(Operator):
     # Inputs
     ValueInput = InputSlot(stype=ValueLike)
-    ValueInputBroad = InputSlot(stype=ValueLike)
-    ImageTypeInput = InputSlot(stype=ImageType)
+    # will be broadcasted:
+    ValueInputBroad = InputSlot(stype=ValueLike, value='test')
+    ImageLikeInput = InputSlot(stype=ImageLike)
     ArrayLikeInput = InputSlot(stype=ArrayLike)
-    ImageTypeInputConnected = InputSlot(stype=ImageType, optional=True)
+    ImageLikeInputConnected = InputSlot(stype=ImageLike, optional=True)
     # Slot with default value
     ValueInputDefault = InputSlot(stype=ValueLike, value=('default_set',))
 
     # Outputs
     ValueOutput = OutputSlot(stype=ValueLike)
-    ImageTypeOutput = OutputSlot(stype=ImageType)
+    ImageLikeOutput = OutputSlot(stype=ImageLike)
     ArrayLikeOutput = OutputSlot(stype=ArrayLike)
 
     def __init__(self, *args, **kwargs):
@@ -34,8 +35,8 @@ class OpMockTLO(Operator):
         self.opAP1 = OpArrayPiper(parent=self)
         self.opAP2 = OpArrayPiper(parent=self)
 
-        self.opAP1.Input.connect(self.ImageTypeInput)
-        self.ImageTypeOutput.connect(self.opAP1.Output)
+        self.opAP1.Input.connect(self.ImageLikeInput)
+        self.ImageLikeOutput.connect(self.opAP1.Output)
 
         self.opAP2.Input.connect(self.ArrayLikeInput)
         self.ArrayLikeOutput.connect(self.opAP2.Output)
@@ -47,7 +48,7 @@ class OpMockTLO(Operator):
     def propagateDirty(self, slot, subindex, roi):
         # Check for proper name because subclasses may define extra inputs.
         # (but decline to override notifyDirty)
-        self.ImageTypeOutput.setDirty(slice(None))
+        self.ImageLikeOutput.setDirty(slice(None))
         self.ArrayLikeOutput.setDirty(slice(None))
 
     def setInSlot(self, slot, subindex, roi, value):
@@ -56,7 +57,7 @@ class OpMockTLO(Operator):
         # as the input of the value slot is manipulated directly. When the
         # output is requested, execute is called.
         assert subindex == ()
-        assert (slot == self.ImageTypeInput) or (slot == self.ArrayLikeInput)
+        assert (slot == self.ImageLikeInput) or (slot == self.ArrayLikeInput)
 
 
 class MockApplet(StandardApplet):
@@ -92,18 +93,17 @@ class TestAppletWrapping(object):
     def setup(self):
         self.workflow = MockWorkflow()
         self.applet = MockApplet(name='MockApplet', workflow=self.workflow)
-        graph = self.applet.topLevelOperator.graph
         data = numpy.random.randint(0, 255, (1, 2, 3, 4, 5), dtype='uint8')
         self.opPiper1 = OperatorWrapper(
             OpArrayPiper,
             parent=self.workflow
         )
 
-        self.opPiper1.Input.meta.axistags = vigra.defaultAxistags('tczyx')
         self.opPiper1.Input.resize(1)
+        self.opPiper1.Input[0].meta.axistags = vigra.defaultAxistags('tczyx')
         self.opPiper1.Input[0].setValue(data)
-        assert "".join(self.opPiper1.Input.meta.getAxisKeys()) == 'tczyx', f"{self.opPiper1.Input.meta.getAxisKeys()}"
-        self.applet.topLevelOperator.ImageTypeInputConnected.connect(self.opPiper1.Output)
+        assert "".join(self.opPiper1.Input[0].meta.getAxisKeys()) == 'tczyx', f"{self.opPiper1.Input.meta.getAxisKeys()}"
+        self.applet.topLevelOperator.ImageLikeInputConnected.connect(self.opPiper1.Output)
 
     def test_appletWrapping(self):
         incoming_axis_order = 'tczyx'
@@ -140,5 +140,5 @@ class TestAppletWrapping(object):
         assert not any(x.lower().find("arraylike") != -1 for x in output_slots), (
             "Should not wrap plain ArrayLike slots.")
 
-        assert "ImageTypeInputConnected" not in input_slots, f"Connected input slots shall not be wrapped"
+        assert "ImageLikeInputConnected" not in input_slots, f"Connected input slots shall not be wrapped"
 

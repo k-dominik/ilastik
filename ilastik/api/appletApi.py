@@ -63,7 +63,7 @@ class WrappedTLO(object):
         for input_slot_name, input_slot in tlo.inputs.items():
             wrapped_slot = None
             try:
-                if isinstance(input_slot.stype, stype.ImageType):
+                if isinstance(input_slot.stype, stype.ImageLike):
                     wrapped_slot = WrappedArrayLikeInputSlot(
                         input_slot,
                         incoming_axis_order=self._input_axis_order
@@ -83,7 +83,8 @@ class WrappedTLO(object):
         output_slots = collections.OrderedDict()
         for output_slot_name, output_slot in tlo.outputs.items():
             wrapped_slot = None
-            if isinstance(output_slot.stype, stype.ImageType):
+            if isinstance(output_slot.stype, stype.ImageLike):
+                print(f'slot: {output_slot_name}')
                 wrapped_slot = WrappedArrayLikeOutputSlot(
                     output_slot, forced_axisorder=self._output_axis_order)
             elif isinstance(output_slot.stype, stype.ValueLike):
