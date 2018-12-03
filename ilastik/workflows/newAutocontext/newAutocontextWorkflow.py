@@ -46,17 +46,17 @@ from lazyflow.operators.generic import OpMultiArrayStacker
 from lazyflow.operators.valueProviders import OpMetadataInjector
 
 class NewAutocontextWorkflowBase(Workflow):
-    
+
     workflowName = "New Autocontext Base"
     defaultAppletIndex = 0 # show DataSelection by default
-    
+
     DATA_ROLE_RAW = 0
     DATA_ROLE_PREDICTION_MASK = 1
-    
+
     # First export names must match these for the export GUI, because we re-use the ordinary PC gui
     # (See PixelClassificationDataExportGui.)
     EXPORT_NAMES_PER_STAGE = ['Probabilities', 'Simple Segmentation', 'Uncertainty', 'Features', 'Labels', 'Input']
-    
+
     @property
     def applets(self):
         return self._applets
@@ -68,7 +68,7 @@ class NewAutocontextWorkflowBase(Workflow):
     def __init__(self, shell, headless, workflow_cmdline_args, project_creation_args, n_stages, *args, **kwargs):
         """
         n_stages: How many iterations of feature selection and pixel classification should be inserted into the workflow.
-        
+
         All other params are just as in PixelClassificationWorkflow
         """
         # Create a graph to be shared by all operators
@@ -84,17 +84,17 @@ class NewAutocontextWorkflowBase(Workflow):
 
         # Parse the creation args: These were saved to the project file when this project was first created.
         parsed_creation_args, unused_args = parser.parse_known_args(project_creation_args)
-        
+
         # Parse the cmdline args for the current session.
         parsed_args, unused_args = parser.parse_known_args(workflow_cmdline_args)
         self.retrain = parsed_args.retrain
-        
+
         data_instructions = "Select your input data using the 'Raw Data' tab shown on the right.\n\n"\
                             "Power users: Optionally use the 'Prediction Mask' tab to supply a binary image that tells ilastik where it should avoid computations you don't need."
 
         self.dataSelectionApplet = self.createDataSelectionApplet()
         opDataSelection = self.dataSelectionApplet.topLevelOperator
-        
+
         # see role constants, above
         role_names = ['Raw Data', 'Prediction Mask']
         opDataSelection.DatasetRoles.setValue( role_names )
@@ -123,7 +123,7 @@ class NewAutocontextWorkflowBase(Workflow):
         self.EXPORT_NAMES = []
         for stage_index in reversed(list(range(n_stages))):
             self.EXPORT_NAMES += ["{} Stage {}".format( name, stage_index+1 ) for name in self.EXPORT_NAMES_PER_STAGE]
-        
+
         # And finally, one last item for *all* probabilities from all stages.
         self.EXPORT_NAMES += ["Probabilities All Stages"]
         opDataExport.SelectionNames.setValue( self.EXPORT_NAMES )
@@ -132,13 +132,13 @@ class NewAutocontextWorkflowBase(Workflow):
         self._applets.append(self.dataSelectionApplet)
         self._applets += itertools.chain(*list(zip(self.featureSelectionApplets, self.pcApplets)))
         self._applets.append(self.dataExportApplet)
-        
+
         self.dataExportApplet.prepare_for_entire_export = self.prepare_for_entire_export
         self.dataExportApplet.post_process_entire_export = self.post_process_entire_export
 
-        self.batchProcessingApplet = BatchProcessingApplet(self, 
-                                                           "Batch Processing", 
-                                                           self.dataSelectionApplet, 
+        self.batchProcessingApplet = BatchProcessingApplet(self,
+                                                           "Batch Processing",
+                                                           self.dataSelectionApplet,
                                                            self.dataExportApplet)
 
         self._applets.append(self.batchProcessingApplet)
@@ -155,7 +155,7 @@ class NewAutocontextWorkflowBase(Workflow):
 
     def createDataSelectionApplet(self):
         """
-        Can be overridden by subclasses, if they want to use 
+        Can be overridden by subclasses, if they want to use
         special parameters to initialize the DataSelectionApplet.
         """
         data_instructions = "Select your input data using the 'Raw Data' tab shown on the right"
@@ -220,7 +220,7 @@ class NewAutocontextWorkflowBase(Workflow):
                 self.stored_classifers.append(opPixelClassification.classifier_cache.Output.value)
             else:
                 self.stored_classifers = []
-        
+
     def handleNewLanesAdded(self):
         """
         Overridden from Workflow base class.
@@ -241,16 +241,16 @@ class NewAutocontextWorkflowBase(Workflow):
         opFirstClassify = self.pcApplets[0].topLevelOperator.getLane(laneIndex)
         opFinalClassify = self.pcApplets[-1].topLevelOperator.getLane(laneIndex)
         opDataExport = self.dataExportApplet.topLevelOperator.getLane(laneIndex)
-        
+
         def checkConstraints(*_):
-            if opData.Image.meta.dtype != np.uint8:
+            if (opData.Image.meta.dtype in [np.uint8, np.uint16]) == False:
                 msg = "The Autocontext Workflow only supports 8-bit images (UINT8 pixel type).\n"\
                       "Your image has a pixel type of {}.  Please convert your data to UINT8 and try again."\
                       .format( str(np.dtype(opData.Image.meta.dtype)) )
                 raise DatasetConstraintError( "Autocontext Workflow", msg, unfixable=True )
-                
+
         opData.Image.notifyReady( checkConstraints )
-        
+
         # Input Image -> Feature Op
         #         and -> Classification Op (for display)
         opFirstFeatures.InputImage.connect( opData.Image )
@@ -266,25 +266,31 @@ class NewAutocontextWorkflowBase(Workflow):
 
         for ( upstreamPcApplet,
               downstreamFeaturesApplet,
-              downstreamPcApplet ) in zip( upstreamPcApplets, 
-                                           downstreamFeatureApplets, 
+              downstreamPcApplet ) in zip( upstreamPcApplets,
+                                           downstreamFeatureApplets,
                                            downstreamPcApplets ):
-            
+
             opUpstreamClassify = upstreamPcApplet.topLevelOperator.getLane(laneIndex)
             opDownstreamFeatures = downstreamFeaturesApplet.topLevelOperator.getLane(laneIndex)
             opDownstreamClassify = downstreamPcApplet.topLevelOperator.getLane(laneIndex)
 
             # Connect label inputs (all are connected together).
             #opDownstreamClassify.LabelInputs.connect( opUpstreamClassify.LabelInputs )
-            
+
             # Connect data path
             #assert opData.Image.meta.dtype == numpy.uint8, "Raw Data must be uint8, not {}".format( opData.Image.meta.dtype )
             opStacker = OpMultiArrayStacker(parent=self)
             opStacker.Images.resize(2)
             opStacker.Images[0].connect( opData.Image )
-            opStacker.Images[1].connect( opUpstreamClassify.PredictionProbabilitiesUint8 )
+            if opData.Image.meta.dtype == np.uint8:
+                opStacker.Images[1].connect( opUpstreamClassify.PredictionProbabilitiesUint8 )
+            else:
+                opStacker.Images[1].connect( opUpstreamClassify.PredictionProbabilitiesUint16 )
+
+
+
             opStacker.AxisFlag.setValue('c')
-            
+
             opDownstreamFeatures.InputImage.connect( opStacker.Output )
             opDownstreamClassify.InputImages.connect( opStacker.Output )
             opDownstreamClassify.FeatureImages.connect( opDownstreamFeatures.OutputImage )
@@ -319,9 +325,9 @@ class NewAutocontextWorkflowBase(Workflow):
         opMetadataOverride = OpMetadataInjector(parent=self)
         opMetadataOverride.Input.connect( opAllStageStacker.Output )
         opMetadataOverride.Metadata.setValue( {'ideal_blockshape' : None } )
-        
+
         opDataExport.Inputs[-1].connect( opMetadataOverride.Output )
-        
+
         for slot in opDataExport.Inputs:
             assert slot.upstream_slot is not None
 
@@ -354,7 +360,7 @@ class NewAutocontextWorkflowBase(Workflow):
             invalid_classifier = opPixelClassification.classifier_cache.fixAtCurrent.value and \
                                  opPixelClassification.classifier_cache.Output.ready() and\
                                  opPixelClassification.classifier_cache.Output.value is None
-    
+
             predictions_ready = features_ready and \
                                 not invalid_classifier and \
                                 len(opPixelClassification.HeadlessPredictionProbabilities) > 0 and \
@@ -362,7 +368,7 @@ class NewAutocontextWorkflowBase(Workflow):
                                 (TinyVector(opPixelClassification.HeadlessPredictionProbabilities[0].meta.shape) > 0).all()
 
             live_update_active = not opPixelClassification.FreezePredictions.value
-            
+
             stage_flags += [ StageFlags(input_ready, features_ready, invalid_classifier, predictions_ready, live_update_active) ]
 
 
@@ -373,30 +379,30 @@ class NewAutocontextWorkflowBase(Workflow):
         # Problems can occur if the features or input data are changed during live update mode.
         # Don't let the user do that.
         any_live_update = any(flags.live_update_active for flags in stage_flags)
-        
+
         # The user isn't allowed to touch anything while batch processing is running.
         batch_processing_busy = self.batchProcessingApplet.busy
-        
+
         self._shell.setAppletEnabled(self.dataSelectionApplet, not any_live_update and not batch_processing_busy)
 
         for stage_index, (featureSelectionApplet, pcApplet) in enumerate(zip(self.featureSelectionApplets, self.pcApplets)):
             upstream_live_update = any(flags.live_update_active for flags in stage_flags[:stage_index])
             this_stage_live_update = stage_flags[stage_index].live_update_active
             downstream_live_update = any(flags.live_update_active for flags in stage_flags[stage_index+1:])
-            
+
             self._shell.setAppletEnabled(featureSelectionApplet, stage_flags[stage_index].input_ready \
                                                                  and not this_stage_live_update \
                                                                  and not downstream_live_update \
                                                                  and not batch_processing_busy)
-            
+
             self._shell.setAppletEnabled(pcApplet, stage_flags[stage_index].features_ready \
                                                    #and not downstream_live_update \ # Not necessary because live update modes are synced -- labels can't be added in live update.
                                                    and not batch_processing_busy)
 
         self._shell.setAppletEnabled(self.dataExportApplet, stage_flags[-1].predictions_ready and not batch_processing_busy)
         self._shell.setAppletEnabled(self.batchProcessingApplet, predictions_ready and not batch_processing_busy)
-    
-        # Lastly, check for certain "busy" conditions, during which we 
+
+        # Lastly, check for certain "busy" conditions, during which we
         #  should prevent the shell from closing the project.
         busy = False
         busy |= self.dataSelectionApplet.busy
@@ -408,8 +414,8 @@ class NewAutocontextWorkflowBase(Workflow):
     def onProjectLoaded(self, projectManager):
         """
         Overridden from Workflow base class.  Called by the Project Manager.
-        
-        If the user provided command-line arguments, use them to configure 
+
+        If the user provided command-line arguments, use them to configure
         the workflow for batch mode and export all results.
         (This workflow's headless mode supports only batch mode for now.)
         """
@@ -419,7 +425,7 @@ class NewAutocontextWorkflowBase(Workflow):
 
         if self.retrain:
             self._force_retrain_classifiers(projectManager)
-        
+
         # Configure the data export operator.
         if self._batch_export_args:
             self.dataExportApplet.configure_operator_with_parsed_args( self._batch_export_args )
@@ -447,7 +453,7 @@ class NewAutocontextWorkflowBase(Workflow):
         else:
             for featureSeletionApplet in self.featureSelectionApplets:
                 featureSeletionApplet.topLevelOperator.BypassCache.setValue(True)
-            
+
         # Unfreeze the classifier caches (ensure that we're exporting based on up-to-date labels)
         self.freeze_statuses = []
         for pcApplet in self.pcApplets:
@@ -467,7 +473,7 @@ class NewAutocontextWorkflowBase(Workflow):
         # Cause the FIRST classifier to be dirty so it is forced to retrain.
         # (useful if the stored labels were changed outside ilastik)
         self.pcApplets[0].topLevelOperator.opTrain.ClassifierFactory.setDirty()
-        
+
         # Unfreeze all classifier caches.
         for pcApplet in self.pcApplets:
             pcApplet.topLevelOperator.FreezePredictions.setValue(False)
@@ -489,7 +495,7 @@ class NewAutocontextWorkflowBase(Workflow):
 
         self._autocontext_menu = autocontext_menu # Must retain here as a member or else reference disappears and the menu is deleted.
         return [self._autocontext_menu]
-        
+
     def distribute_labels_from_current_stage(self):
         """
         Distrubute labels from the currently viewed stage across all other stages.
@@ -501,13 +507,13 @@ class NewAutocontextWorkflowBase(Workflow):
         if current_applet not in self.pcApplets:
             QMessageBox.critical(self.shell, "Wrong page selected", "The currently active page isn't a Training page.")
             return
-        
+
         current_stage_index = self.pcApplets.index(current_applet)
         destination_stage_indexes, partition = self.get_label_distribution_settings( current_stage_index,
                                                                                      num_stages=len(self.pcApplets))
         if destination_stage_indexes is None:
             return # User cancelled
-        
+
         current_applet = self._applets[self.shell.currentAppletIndex]
         opCurrentPixelClassification = current_applet.topLevelOperator
         num_current_stage_classes = len(opCurrentPixelClassification.LabelNames.value)
@@ -516,26 +522,26 @@ class NewAutocontextWorkflowBase(Workflow):
         for stage_index in destination_stage_indexes:
             # Get this stage's OpPixelClassification
             opPc = self.pcApplets[stage_index].topLevelOperator
-    
+
             # Copy Label Colors
             current_stage_label_colors = opCurrentPixelClassification.LabelColors.value
             new_label_colors = list(opPc.LabelColors.value)
             new_label_colors[:num_current_stage_classes] = current_stage_label_colors[:num_current_stage_classes]
             opPc.LabelColors.setValue(new_label_colors)
-            
+
             # Copy PMap colors
             current_stage_pmap_colors = opCurrentPixelClassification.PmapColors.value
             new_pmap_colors = list(opPc.PmapColors.value)
             new_pmap_colors[:num_current_stage_classes] = current_stage_pmap_colors[:num_current_stage_classes]
             opPc.PmapColors.setValue(new_pmap_colors)
-    
-            # Copy Label Names                    
+
+            # Copy Label Names
             current_stage_label_names = opCurrentPixelClassification.LabelNames.value
             new_label_names = list(opPc.LabelNames.value)
             new_label_names[:num_current_stage_classes] = current_stage_label_names[:num_current_stage_classes]
             opPc.LabelNames.setValue(new_label_names)
 
-        # For each lane, copy over the labels from the source stage to the destination stages 
+        # For each lane, copy over the labels from the source stage to the destination stages
         for lane_index in range(len(opCurrentPixelClassification.InputImages)):
             opPcLane = opCurrentPixelClassification.getLane(lane_index)
 
@@ -561,7 +567,7 @@ class NewAutocontextWorkflowBase(Workflow):
                 if partition:
                     num_labels = len(nonzero_coords[0])
                     destination_stage_map = np.random.choice(destination_stage_indexes, (num_labels,))
-                
+
                 for stage_index in destination_stage_indexes:
                     if not partition:
                         this_stage_block_labels = block_labels
@@ -580,7 +586,7 @@ class NewAutocontextWorkflowBase(Workflow):
 
                     # Inject
                     opPc.LabelInputs[roiToSlice(*block_roi)] = this_stage_block_labels
-    
+
     @staticmethod
     def get_label_distribution_settings(source_stage_index, num_stages):
         # Late import.
@@ -596,38 +602,38 @@ class NewAutocontextWorkflowBase(Workflow):
 
                 from PyQt5.QtCore import Qt
                 from PyQt5.QtWidgets import QGroupBox, QCheckBox, QRadioButton, QDialogButtonBox
-            
+
                 self.setWindowTitle("Distributing from Stage {}".format(source_stage_index+1))
 
                 self.stage_checkboxes = []
                 for stage_index in range(1, num_stages+1):
                     self.stage_checkboxes.append( QCheckBox("Stage {}".format( stage_index )) )
-                
+
                 # By default, send labels back into the current stage, at least.
                 self.stage_checkboxes[source_stage_index].setChecked(True)
-                
+
                 stage_selection_layout = QVBoxLayout()
                 for checkbox in self.stage_checkboxes:
                     stage_selection_layout.addWidget( checkbox )
 
                 stage_selection_groupbox = QGroupBox("Send labels from Stage {} to:".format( source_stage_index+1 ), self)
                 stage_selection_groupbox.setLayout(stage_selection_layout)
-                
+
                 self.copy_button = QRadioButton("Copy", self)
                 self.partition_button = QRadioButton("Partition", self)
                 self.partition_button.setChecked(True)
                 distribution_mode_layout = QVBoxLayout()
                 distribution_mode_layout.addWidget(self.copy_button)
                 distribution_mode_layout.addWidget(self.partition_button)
-                
+
                 distribution_mode_group = QGroupBox("Distribution Mode", self)
                 distribution_mode_group.setLayout(distribution_mode_layout)
-                
+
                 buttonbox = QDialogButtonBox( Qt.Horizontal, parent=self )
                 buttonbox.setStandardButtons( QDialogButtonBox.Ok | QDialogButtonBox.Cancel )
                 buttonbox.accepted.connect( self.accept )
                 buttonbox.rejected.connect( self.reject )
-                
+
                 dlg_layout = QVBoxLayout()
                 dlg_layout.addWidget(stage_selection_groupbox)
                 dlg_layout.addWidget(distribution_mode_group)
@@ -640,7 +646,7 @@ class NewAutocontextWorkflowBase(Workflow):
                 if self.partition_button.isChecked():
                     return "partition"
                 assert False, "Shouldn't get here."
-            
+
             def destination_stages(self):
                 """
                 Return the list of stage_indexes (0-based) that the user checked.
@@ -650,12 +656,12 @@ class NewAutocontextWorkflowBase(Workflow):
         dlg = LabelDistributionOptionsDlg( source_stage_index, num_stages )
         if dlg.exec_() == QDialog.Rejected:
             return (None, None)
-        
+
         destination_stage_indexes = dlg.destination_stages()
         partition = (dlg.distribution_mode() == "partition")
         return (destination_stage_indexes, partition)
 
-        
+
 class AutocontextTwoStage(NewAutocontextWorkflowBase):
     workflowName = "AutocontextTwoStage"
     workflowDisplayName = "Autocontext (2-stage)"
@@ -677,6 +683,6 @@ if ilastik.config.cfg.getboolean('ilastik', 'debug'):
     class AutocontextFourStage(NewAutocontextWorkflowBase):
         workflowName = "AutocontextFourStage"
         workflowDisplayName = "Autocontext (4-stage)"
-     
+
         def __init__(self, *args, **kwargs):
             super(AutocontextFourStage, self).__init__(*args, n_stages=4, **kwargs)
