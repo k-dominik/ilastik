@@ -244,7 +244,8 @@ class NewAutocontextWorkflowBase(Workflow):
 
         def checkConstraints(*_):
             if (opData.Image.meta.dtype in [np.uint8, np.uint16]) == False:
-                msg = "The Autocontext Workflow only supports 8-bit images (UINT8 pixel type).\n"\
+                msg = "The Autocontext Workflow only supports 8-bit images (UINT8 pixel type)\n"\
+                      "or 16-bit images (UINT16 pixel type)\n"\
                       "Your image has a pixel type of {}.  Please convert your data to UINT8 and try again."\
                       .format( str(np.dtype(opData.Image.meta.dtype)) )
                 raise DatasetConstraintError( "Autocontext Workflow", msg, unfixable=True )
