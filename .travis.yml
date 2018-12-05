@@ -37,9 +37,9 @@ install:
   # - conda info -a
 
   - if [[ ! -d $TEST_ENV_PREFIX ]]; then
-      conda create -q -n $TEST_ENV -c ilastik-forge -c conda-forge ilastik-dependencies-no-solvers nose;
+      conda create -q -n $TEST_ENV -c ilastik-forge -c conda-forge ilastik-dependencies-no-solvers pytest=3.10;
     else
-      conda install -y -n ${TEST_ENV} -c ilastik-forge -c conda-forge ilastik-dependencies-no-solvers nose;
+      conda install -y -n ${TEST_ENV} -c ilastik-forge -c conda-forge ilastik-dependencies-no-solvers pytest=3.10;
     fi
   # remove installed ilastik
   - rm -rf ${TEST_ENV_PREFIX}/ilastik-meta
@@ -50,8 +50,8 @@ install:
   - ln -s $TRAVIS_BUILD_DIR ${TEST_ENV_PREFIX}/ilastik-meta/ilastik
 
 before_script:
-  - "export DISPLAY=:99.0"
-  - "sh -e /etc/init.d/xvfb start"
+  - if [[ "${TRAVIS_OS_NAME}" == "osx" ]]; then ( sudo Xvfb :99 -ac -screen 0 1024x768x8; echo ok )& fi
+  - if [[ "${TRAVIS_OS_NAME}" == "linux" ]]; then export DISPLAY=:99.0; sh -e /etc/init.d/xvfb start; echo ok; fi
   - sleep 3 # give xvfb some time to start
 
 script:
