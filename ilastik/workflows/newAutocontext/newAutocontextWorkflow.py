@@ -279,17 +279,15 @@ class NewAutocontextWorkflowBase(Workflow):
             #opDownstreamClassify.LabelInputs.connect( opUpstreamClassify.LabelInputs )
 
             # Connect data path
-            #assert opData.Image.meta.dtype == numpy.uint8, "Raw Data must be uint8, not {}".format( opData.Image.meta.dtype )
+            assert opData.Image.meta.dtype == opUpstreamClassify.PredictionProbabilitiesAutocontext.meta.dtype, (
+                "Probability dtype needs to match up with input image dtype, got: "
+                f"input: {opData.Image.meta.dtype} "
+                f"probabilities: {opUpstreamClassify.PredictionProbabilitiesAutocontext.meta.dtype}"
+            )
             opStacker = OpMultiArrayStacker(parent=self)
             opStacker.Images.resize(2)
             opStacker.Images[0].connect( opData.Image )
-            if opData.Image.meta.dtype == np.uint8:
-                opStacker.Images[1].connect( opUpstreamClassify.PredictionProbabilitiesUint8 )
-            else:
-                opStacker.Images[1].connect( opUpstreamClassify.PredictionProbabilitiesUint16 )
-
-
-
+            opStacker.Images[1].connect( opUpstreamClassify.PredictionProbabilitiesAutocontext )
             opStacker.AxisFlag.setValue('c')
 
             opDownstreamFeatures.InputImage.connect( opStacker.Output )
