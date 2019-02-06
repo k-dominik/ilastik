@@ -8,9 +8,9 @@ usage ()
 {
   echo "Usage : $0 [options] <ENVIRONMENT_NAME> [<ILASTIK-META_LOCAL_SOURCE_PATH>]"
   echo
-  echo "valid options (each can be invoked multiple times:"
+  echo "valid options (each can be invoked multiple times):"
   echo "  -a <additional_package>"
-  echo "  -c <additional_channel>  use additional conda channel (default: only conda-forge)"
+  echo "  -c <additional_channel>  use different conda channels (default: '-c ilastik-forge -c conda-forge')"
   echo "  -s                       install with solvers (on Linux both solvers, CPLEX and Gurobi, have to be available)"
   echo
   echo "If ILASTIK-META_LOCAL_SOURCE_PATH is not given, package"
@@ -42,7 +42,11 @@ then
     CHANNELS+="-c ${ch} "
   done
 fi
-CHANNELS+="-c conda-forge"
+
+if [ "${CHANNELS}" == "" ]
+then
+  CHANNELS+="-c ilastik-forge -c conda-forge"
+fi
 
 if [ ${#ADDITIONAL_PACKAGES[@]} -gt 0 ]
 then
