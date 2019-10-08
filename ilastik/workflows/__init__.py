@@ -144,8 +144,9 @@ if can_nn:
         WORKFLOW_CLASSES += [NNClassificationWorkflow]
 
 
-import voxelSegmentation
-WORKFLOW_CLASSES += [voxelSegmentation.VoxelSegmentationWorkflow]
+from .voxelSegmentation import VoxelSegmentationWorkflow
+
+WORKFLOW_CLASSES += [VoxelSegmentationWorkflow]
 
 # Examples
 if ilastik.config.cfg.getboolean("ilastik", "debug"):
