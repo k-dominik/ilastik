@@ -7,7 +7,7 @@ from ilastik.applets.layerViewer.layerViewerGui import LayerViewerGui
 import ilastik.utility.gui as guiutil
 
 
-class EdgeTrainingWithMulticutGui(MulticutGuiMixin, EdgeTrainingMixin, LayerViewerGui):
+class EdgeTrainingWithMulticutGui(EdgeTrainingMixin, MulticutGuiMixin, LayerViewerGui):
     def __init__(self, parentApplet, topLevelOperatorView):
         self.__cleanup_fns = []
         super().__init__(parentApplet, topLevelOperatorView, crosshair=False)

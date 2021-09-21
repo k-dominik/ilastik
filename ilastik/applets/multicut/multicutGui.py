@@ -57,7 +57,7 @@ logger = logging.getLogger(__name__)
 # This is a mixin that can be added to any LayerViewerGui subclass
 # See MulticutGui (bottom of this file) for the standalone version.
 class MulticutGuiMixin:
-
+    _probability_colortable_initialized = False
     ###########################################
     ### AppletGuiInterface Concrete Methods ###
     ###########################################
@@ -83,7 +83,7 @@ class MulticutGuiMixin:
         self.superpixel_edge_layer = None
         self.disagreement_layer = None
         super(MulticutGuiMixin, self).__init__(parentApplet, topLevelOperatorView, **kwargs)
-        self.__init_probability_colortable()
+        self._init_probability_colortable()
         self.__init_disagreement_label_colortable()
 
     def createDrawerControls(self):
@@ -189,7 +189,9 @@ class MulticutGuiMixin:
 
         return drawer
 
-    def __init_probability_colortable(self):
+    def _init_probability_colortable(self):
+        if self._probability_colortable_initialized:
+            return
         self.probability_colortable = []
         for v in np.linspace(0.0, 1.0, num=101):
             self.probability_colortable.append(QColor(255 * (v), 255 * (1.0 - v), 0))
@@ -204,6 +206,7 @@ class MulticutGuiMixin:
         op = self.__topLevelOperatorView
         op.EdgeProbabilitiesDict.notifyDirty(self.__update_probability_edges)
         self.__cleanup_fns.append(partial(op.EdgeProbabilitiesDict.unregisterDirty, self.__update_probability_edges))
+        self._probability_colortable_initialized = True
 
     # Configure the handler for updated probability maps
     # FIXME: Should we make a new Layer subclass that handles this colortable mapping for us?  Yes.

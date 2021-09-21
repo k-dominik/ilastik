@@ -55,7 +55,7 @@ logger = logging.getLogger(__name__)
 
 
 class EdgeTrainingMixin:
-
+    _probability_colortable_initialized = False
     ###########################################
     ### AppletGuiInterface Concrete Methods ###
     ###########################################
@@ -311,6 +311,8 @@ class EdgeTrainingMixin:
     # FIXME: Should we make a new Layer subclass that handles this colortable mapping for us?  Yes.
 
     def _init_probability_colortable(self):
+        if self._probability_colortable_initialized:
+            return
         self.probability_colortable = []
         for v in np.linspace(0.0, 1.0, num=101):
             self.probability_colortable.append(QColor(255 * (v), 255 * (1.0 - v), 0))
@@ -325,6 +327,7 @@ class EdgeTrainingMixin:
         op = self.topLevelOperatorView
         cleanup_fn = op.EdgeProbabilitiesDict.notifyDirty(self.update_probability_edges, defer=True)
         self.__cleanup_fns.append(cleanup_fn)
+        self._probability_colortable_initialized = True
 
     def update_probability_edges(self, *args):
         def _impl():
