@@ -45,7 +45,7 @@ dependencies:
   - ilastik-pytorch-version-helper-cpu
   - pytorch 1.9.*
   - tensorflow 1.14.*
-  - tiktorch
+  - tiktorch 22.3.0
 
   # dev-only dependencies
   - conda-build
