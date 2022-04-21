@@ -157,6 +157,18 @@ class ShellGuiTestCaseBase(object):
         QApplication.sendEvent(imgView, move)
         QApplication.processEvents()
 
+    def clickMouseFromCenter(self, imgView, coords, modifier=Qt.NoModifier, button=Qt.LeftButton) -> None:
+        centerPoint = old_div(imgView.rect().bottomRight(), 2)
+        point = QPoint(*coords) + centerPoint
+        self.moveMouseFromCenter(imgView, coords, modifier)
+        press = QMouseEvent(QEvent.MouseButtonPress, point, button, button, modifier)
+        QApplication.sendEvent(imgView.viewport(), press)
+        # release = QMouseEvent(QEvent.MouseButtonRelease, point, button, Qt.NoButton, modifier)
+        # QApplication.sendEvent(imgView.viewport(), release)
+        # Wait for the gui to catch up
+        QApplication.processEvents()
+        self.waitForViews([imgView])
+
     def strokeMouse(
         self,
         imgView: QAbstractScrollArea,
