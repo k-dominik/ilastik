@@ -2,6 +2,7 @@ from tests.test_ilastik.helpers import ShellGuiTestCaseBase
 import h5py
 import logging
 import numpy
+import os
 import sys
 import shutil
 import tempfile
@@ -93,11 +94,12 @@ class TestEdgeTrainingWithMulticutGui(ShellGuiTestCaseBase):
         cls.timer.pause()
         logger.debug(f"Total Time: {cls.timer.seconds()} seconds.")
 
+        # Clean up: Delete any test files we generated
+        # shutil.rmtree(cls.temp_dir, onerror=lambda *x: logger.error(f"Could not delete file {x}"))
+        print(f"python ilastik_scripts/ilastik_startup.py --project {cls.project_file}")
+
         # Call our base class so the app quits!
         super().teardown_class()
-
-        # Clean up: Delete any test files we generated
-        shutil.rmtree(cls.temp_dir, onerror=lambda *x: logger.error(f"Could not delete file {x}"))
 
     def test_00_check_preconditions(self):
         """Make sure the needed files exist"""
