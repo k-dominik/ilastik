@@ -33,7 +33,7 @@ import numpy as np
 from PyQt5 import uic
 from PyQt5.QtCore import Qt, QEvent
 from PyQt5.QtGui import QColor, QPixmap, QIcon
-from PyQt5.QtWidgets import QMessageBox
+from PyQt5.QtWidgets import QMessageBox, QMenu, QAction
 
 from volumina.api import createDataSource, AlphaModulatedLayer, ColortableLayer
 from volumina import colortables
@@ -444,3 +444,55 @@ class ThresholdTwoLevelsGui(LayerViewerGui):
             )
 
         return layers
+
+    def handleEditorRightClick(self, position5d, globalWindowCoordinate):
+        final_output_layer = self.getLayer("Final output")
+        if final_output_layer and not final_output_layer.visible:
+            return
+        op = self.topLevelOperatorView
+        obj = self._getObject(op.CachedOutput, position5d)
+
+        if obj == 0:  # background object
+            return
+
+        def _getObjectSize(obj_id):
+            t = position5d[0]
+            # this has to be done more lazily!! requesting the whole volume
+            # for a right click is a bit much....
+            data = op.CachedOutput[t, ...].wait()
+            return (data == obj_id).sum()
+
+        def _set_min_max_size(mode: str, value=None):
+            obj_size = value or _getObjectSize(obj)
+            if mode == "min":
+                self.topLevelOperatorView.MinSize.setValue(obj_size + 1)
+            elif mode == "max":
+                self.topLevelOperatorView.MaxSize.setValue(obj_size - 1)
+
+            self._updateGuiFromOperator()
+
+        menu = QMenu(self)
+
+        min_action = QAction("Set minimum size from object")
+        min_action.triggered.connect(partial(_set_min_max_size, "min"))
+        max_action = QAction("Set maximum size from object")
+        max_action.triggered.connect(partial(_set_min_max_size, "max"))
+        menu.addAction(min_action)
+        menu.addAction(max_action)
+
+        menu.exec_(globalWindowCoordinate)
+
+    @staticmethod
+    def _getObject(slot, pos5d):
+        slicing = tuple(slice(i, i + 1) for i in pos5d)
+        arr = slot[slicing].wait()
+        return arr.flat[0]
+
+    def getLayer(self, name):
+        """find a layer by name"""
+        try:
+            labellayer = next(filter(lambda l: l.name == name, self.layerstack))
+        except StopIteration:
+            return None
+        else:
+            return labellayer
