@@ -40,6 +40,15 @@ class EdgeTrainingApplet(StandardApplet):
     def topLevelOperator(self):
         return self._topLevelOperator
 
+    def getMultiLaneGui(self):
+        multi_lane_gui = super().getMultiLaneGui()
+        guis = multi_lane_gui.getGuis()
+        for gui in guis:
+            if not gui.isInitialized:
+                gui.selectLabel(0)
+                gui.isInitialized = True
+        return multi_lane_gui
+
     @property
     def singleLaneGuiClass(self):
         from .edgeTrainingGui import EdgeTrainingGui

@@ -23,21 +23,26 @@ from contextlib import contextmanager
 
 import numpy as np
 
-from PyQt5.QtCore import Qt
+from PyQt5.QtCore import Qt, pyqtSignal
 from PyQt5.QtGui import QColor, QPen, QIcon
 from PyQt5.QtWidgets import (
     QWidget,
     QVBoxLayout,
     QHBoxLayout,
+    QCheckBox,
+    QGridLayout,
     QSpacerItem,
     QSizePolicy,
     QPushButton,
     QMessageBox,
     QAction,
     QMenu,
+    QDialog,
+    QLabel,
 )
 
 from ilastikrag.gui import FeatureSelectionDialog
+from .simpleEdgeFeatSelection import SimpleEdgeFeatureSelection
 from lazyflow.utility.orderedSignal import OrderedSignal
 
 from ilastik.utility.gui import threadRouted, silent_qobject
@@ -213,11 +218,24 @@ class EdgeTrainingMixin:
         cleanup_fn = op.GroundtruthSegmentation.notifyReady(self.configure_gui_from_operator, defer=True)
         self.__cleanup_fns.append(cleanup_fn)
 
+    def _get_default_feature_selection(self):
+        raw_channels = self.topLevelOperatorView.RawData.meta.channel_names
+        raw_is_3D = self.topLevelOperatorView.RawData.meta.getTaggedShape().get("z", 1) > 1
+        selected_input_channels = self.topLevelOperatorView.WatershedSelectedInput.meta.channel_names
+        default_features = SimpleEdgeFeatureSelection.default_features(raw_channels, selected_input_channels, raw_is_3D)
+
+        selected_features = {chan: set() for chan in raw_channels + selected_input_channels}
+        for group_features in default_features.values():
+            if group_features["state"]:
+                for channel, features in group_features["features"].items():
+                    selected_features[channel] |= set(features)
+
+        return {k: list(v) for k, v in selected_features.items()}
+
     def _open_feature_selection_dlg(self):
-        rag = self.topLevelOperatorView.Rag.value
-        feature_names = rag.supported_features()
-        channel_names = self.topLevelOperatorView.VoxelData.meta.channel_names
-        default_selections = self.topLevelOperatorView.FeatureNames.value
+        if not self.topLevelOperatorView.FeatureNames.ready():
+            self.topLevelOperatorView.FeatureNames.setValue(self._get_default_feature_selection())
+        current_selection = self.topLevelOperatorView.FeatureNames.value
 
         def decodeToStringIfBytes(s):
             if isinstance(s, bytes):
@@ -225,21 +243,37 @@ class EdgeTrainingMixin:
             else:
                 return s
 
+        rag = self.topLevelOperatorView.Rag.value
+        feature_names = rag.supported_features()
+        channel_names = self.topLevelOperatorView.VoxelData.meta.channel_names
         channel_names = [decodeToStringIfBytes(s) for s in channel_names]
         feature_names = [decodeToStringIfBytes(s) for s in feature_names]
-        # default_selections
-        #    *dict, str: list - of - str *
-        default_selections_strings = {}
-        for key, value in default_selections.items():
-            default_selections_strings[decodeToStringIfBytes(key)] = [decodeToStringIfBytes(s) for s in value]
 
-        dlg = FeatureSelectionDialog(channel_names, feature_names, default_selections_strings, parent=self)
-        dlg_result = dlg.exec_()
-        if dlg_result != dlg.Accepted:
+        initial_selections = {}
+        for key, value in current_selection.items():
+            initial_selections[decodeToStringIfBytes(key)] = [decodeToStringIfBytes(s) for s in value]
+
+        raw_channels = self.topLevelOperatorView.RawData.meta.channel_names
+        selected_input_channels = self.topLevelOperatorView.WatershedSelectedInput.meta.channel_names
+        probability_channels = [x for x in channel_names if x not in raw_channels + selected_input_channels]
+
+        dlg = SimpleEdgeFeatureSelection(
+            raw_channels,
+            selected_input_channels,
+            probability_channels,
+            initial_selections,
+            supported_features=feature_names,
+            parent=self,
+        )
+        res = dlg.exec_()
+        if res != dlg.Accepted:
             return
 
-        selections = dlg.selections()
-        self.topLevelOperatorView.FeatureNames.setValue(selections)
+        new_selections = dlg.selections()
+        print(">>>> feat_vals")
+        print(">>>> selection", dlg.selections())
+
+        self.topLevelOperatorView.FeatureNames.setValue(new_selections)
 
     # Configure the handler for updated edge label maps
     def _init_edge_label_colortable(self):
