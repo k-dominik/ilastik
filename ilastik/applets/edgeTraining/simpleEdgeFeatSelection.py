@@ -3,23 +3,25 @@ from functools import partial
 from typing import Dict, List, Set
 
 from ilastikrag.gui import FeatureSelectionDialog
-from PyQt5.QtCore import pyqtSignal, Qt
+from PyQt5.QtCore import Qt
 from PyQt5.QtWidgets import (
     QCheckBox,
     QDialog,
     QDialogButtonBox,
-    QGridLayout,
     QGroupBox,
-    QHBoxLayout,
     QLabel,
+    QLayout,
     QPushButton,
     QSizePolicy,
-    QToolButton,
     QVBoxLayout,
-    QWidget,
 )
 
-from ilastik.widgets.CollapsibleWidget import CollapsibleWidget
+from ilastik.widgets.collapsibleWidget import CollapsibleWidget
+from ilastik.utility.gui.widgets import silent_qobject
+
+# need proper names:
+# * feature_dict: {channel: [feats]}
+# * internal_state_dict {all the internal stuff}
 
 
 class SimpleEdgeFeatureSelection(QDialog):
@@ -31,10 +33,15 @@ class SimpleEdgeFeatureSelection(QDialog):
         raw_edge = "raw data along edges"
         raw_sp = "raw data on superpixels"
 
-    openAdvanced = pyqtSignal()
-
     def __init__(
-        self, raw_channels, boundary_channels, probability_channels, selection, supported_features, parent=None
+        self,
+        raw_channels,
+        boundary_channels,
+        probability_channels,
+        selection,
+        supported_features,
+        data_is_3d=False,
+        parent=None,
     ):
         super().__init__(parent)
         layout = QVBoxLayout()
@@ -43,24 +50,17 @@ class SimpleEdgeFeatureSelection(QDialog):
         self.raw_channels = raw_channels
         self.boundary_channels = boundary_channels
         self.probability_channels = probability_channels
+        self.data_is_3d = data_is_3d
         self.channel_names = raw_channels + boundary_channels + probability_channels
 
-        self.feat_vals = self.default_features(raw_channels, boundary_channels)
+        self._internal_state = self._default_features_state_dict(raw_channels, boundary_channels, self.data_is_3d)
 
         # for the "big" feature selection dialog
         self.supported_features = supported_features
-        # self.default_features = []
-
-        self._current_selection = selection
-        if selection:
-            checks = self._checkmarks(self.feat_vals, selection)
-            for check, val in checks.items():
-                self.feat_vals[check]["state"] = val
 
         def make_checkbox(name):
             checkbox = QCheckBox(name.value)
-            details = self.feat_vals[name]
-            checkbox.setCheckState(Qt.Checked if details["state"] else Qt.Unchecked)
+            details = self._internal_state[name]
             checkbox.stateChanged.connect(partial(self._update_state, name))
             checkbox.setToolTip(details["description"])
             return checkbox
@@ -111,33 +111,47 @@ class SimpleEdgeFeatureSelection(QDialog):
         buttonbox.accepted.connect(self.accept)
         buttonbox.rejected.connect(self.reject)
 
-        advButton = QPushButton("advanced")
+        advButton = QPushButton("Advanced")
         advButton.clicked.connect(self.openAdvancedDlg)
+        self._advButton = advButton
         buttonbox.addButton(advButton, QDialogButtonBox.ActionRole)
 
-        resetButton = QPushButton("reset")
+        resetButton = QPushButton("Reset")
+        resetButton.setToolTip("Reset selection to default.")
         resetButton.clicked.connect(self.reset_to_default)
         buttonbox.addButton(resetButton, QDialogButtonBox.ResetRole)
 
         layout.addWidget(buttonbox)
 
         self.setLayout(layout)
+        layout.setSizeConstraint(QLayout.SetFixedSize)
 
-        self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+        self.setSizePolicy(QSizePolicy.MinimumExpanding, QSizePolicy.Fixed)
 
-        if not self.check_selection_compatible_with_dlg_features(self.feat_vals, selection):
-            self.setCheckboxesEnabled(False)
+        self.setFeatures(selection)
 
-    def setFeatures(self, feaures):
-        # set some internal feature variable -
+    def setFeatures(self, features):
+        # set some internal feature variable
         self._current_selection = features
 
-        # now update the checkmarks if necessary
+        if not self.check_selection_compatible_with_dlg_features(self._internal_state, self._current_selection):
+            self.setEnabledState(False)
+            for checkbox in self.checkboxes.values():
+                with silent_qobject(checkbox) as w:
+                    w.setChecked(Qt.Unchecked)
+            return
 
-    def getFeatures():
-        pass
+        self.setEnabledState(True)
 
-    def setCheckboxesEnabled(self, state: bool):
+        # synchronize checkboxes
+        if self._current_selection:
+            checks = self._checkmarks(self._internal_state, self._current_selection)
+            for check, val in checks.items():
+                self._internal_state[check]["state"] = val
+                with silent_qobject(self.checkboxes[check]) as w:
+                    w.setCheckState(Qt.Checked if val else Qt.Unchecked)
+
+    def setEnabledState(self, state: bool):
         """
         User has selected something in the advanced dialog, disable all
         checkboxes.
@@ -145,11 +159,19 @@ class SimpleEdgeFeatureSelection(QDialog):
         self.intensityGroupBox.setEnabled(state)
         self.shapeGroupBox.setEnabled(state)
 
-    def _update_state(self, name, state):
-        self.feat_vals[name]["state"] = bool(state)
+        if state:
+            self._advButton.setText("Advanced")
+            self._advButton.setToolTip("Open advanced Feature Selection Dialog for more fine-grained control.")
+        else:
+            self._advButton.setText("Advanced*")
+            self._advButton.setToolTip(
+                "Non-standard feature selection - reset or open advanced Feature Selection Dialog for more fine-grained control."
+            )
 
-    def _get_states(self):
-        return self.feat_vals
+    def _update_state(self, group, state):
+        """update after checkbox change - always valid feature set"""
+        self._internal_state[group]["state"] = bool(state)
+        self._current_selection = SimpleEdgeFeatureSelection._to_feature_dict(self._internal_state)
 
     def selections(self) -> Dict[str, List[str]]:
         """
@@ -158,41 +180,42 @@ class SimpleEdgeFeatureSelection(QDialog):
         returns:
           dict of currently selected features (values) per channel name (keys)
         """
-        dlg_features = self.feat_vals
-
-        selected_features: Dict[str, Set[str]] = {chan: set() for chan in self.channel_names}
-        for group_features in dlg_features.values():
-            if group_features["state"]:
-                for channel, features in group_features["features"].items():
-                    selected_features[channel] |= set(features)
-
-        return {k: list(v) for k, v in selected_features.items()}
+        return self._current_selection
 
     def check_selection_compatible_with_dlg_features(self, default_features, selection) -> bool:
         for group, group_features in default_features.items():
             # make sure that groups are not _partly_ selected
             for chan, features in group_features["features"].items():
-                overlap_sum = sum(x in features for x in selection)
+                overlap_sum = sum(x in features for x in selection.get(chan, []))
                 if overlap_sum not in [0, len(features)]:
+                    return False
+            # now check that there are no features not in the default_feauture_set
+            feats_flat = SimpleEdgeFeatureSelection._to_feature_dict(default_features)
+
+            for chan, feats in selection.items():
+                if feats and (chan not in feats_flat):
+                    return False
+                if any(x not in feats_flat[chan] for x in feats):
                     return False
         return True
 
     def reset_to_default(self):
-        self.feat_vals = self.default_features(self.raw_channels, self.boundary_channels)
-
-        for k, v in self.feat_vals.items():
-            self.checkboxes[k].setCheckState(QCheckBox.Checked if v["state"] else QCheckBox.Unchecked)
+        self.setFeatures(
+            SimpleEdgeFeatureSelection._to_feature_dict(
+                self._default_features_state_dict(self.raw_channels, self.boundary_channels)
+            )
+        )
 
     def _checkmarks(self, default_features, selection) -> Dict[str, bool]:
         if not self.check_selection_compatible_with_dlg_features(default_features, selection):
             # don't bother
-            {}
+            return {}
 
         checks = {}
         for group, group_features in default_features.items():
             # make sure that groups are not _partly_ selected
             for chan, features in group_features["features"].items():
-                overlap_sum = sum(x in features for x in selection[chan])
+                overlap_sum = sum(x in features for x in selection.get(chan, []))
                 if overlap_sum == len(features):
                     checks[group] = True
                 else:
@@ -201,15 +224,21 @@ class SimpleEdgeFeatureSelection(QDialog):
         return checks
 
     def openAdvancedDlg(self):
-        dlg = FeatureSelectionDialog(self.channel_names, self.supported_features, self.feature_selection(), parent=self)
+        default_features = self._default_features_state_dict(self.raw_channels, self.boundary_channels)
+        default_features = SimpleEdgeFeatureSelection._to_feature_dict(default_features)
+
+        dlg = FeatureSelectionDialog(
+            self.channel_names, self.supported_features, self.selections(), default_features, parent=self
+        )
         dlg_result = dlg.exec_()
         if dlg_result != dlg.Accepted:
             return
 
         selections = dlg.selections()
+        self.setFeatures(selections)
 
     @classmethod
-    def default_features(cls, raw_channels, edge_channels, data_is_3D=False):
+    def _default_features_state_dict(cls, raw_channels, edge_channels, data_is_3d=False):
         default_sp_features = [
             "standard_sp_mean",
             "standard_sp_quantiles_10",
@@ -226,7 +255,7 @@ class SimpleEdgeFeatureSelection(QDialog):
             "edgeregion_edge_regionradii_1",
         ]
 
-        if data_is_3D:
+        if data_is_3d:
             default_shape_feautures += ["edgeregion_edge_regionradii_2", "edgeregion_edge_volume"]
 
         selected_features = {}
@@ -267,6 +296,23 @@ class SimpleEdgeFeatureSelection(QDialog):
 
         return default_dialog_features
 
+    @staticmethod
+    def _to_feature_dict(state_dict) -> Dict[str, List[str]]:
+        selected_features: Dict[str, Set[str]] = {}
+
+        for group_features in state_dict.values():
+            if group_features["state"]:
+                for channel, features in group_features["features"].items():
+                    if channel not in selected_features:
+                        selected_features[channel] = set()
+                    selected_features[channel] |= set(features)
+
+        return {k: list(v) for k, v in selected_features.items()}
+
+    @classmethod
+    def default_features(cls, raw_channels, boundary_channels, data_is_3d):
+        return cls._to_feature_dict(cls._default_features_state_dict(raw_channels, boundary_channels, data_is_3d))
+
 
 if __name__ == "__main__":
     import os
@@ -281,6 +327,7 @@ if __name__ == "__main__":
     app = QApplication([])
 
     supported_features = [
+        "edgeregion_edge_area",
         "edgeregion_edge_regionradii_0",
         "edgeregion_edge_regionradii_1",
         "standard_sp_mean",
@@ -326,13 +373,28 @@ if __name__ == "__main__":
         ],
         ["boundary"],
         ["probs 1", "probs 2"],
-        {},
+        {
+            "boundary": ["standard_sp_mean", "standard_sp_quantiles_10", "standard_sp_quantiles_90"],
+            "raw 0": [
+                "standard_edge_mean",
+                "standard_edge_quantiles_10",
+                "standard_edge_quantiles_90",
+            ],
+            "raw 51": [
+                "standard_edge_mean",
+                "standard_edge_quantiles_10",
+                "standard_edge_quantiles_90",
+            ],
+            "raw 16": [
+                "standard_edge_mean",
+                "standard_edge_quantiles_10",
+                "standard_edge_quantiles_90",
+            ],
+        },
         supported_features=supported_features,
     )
     dlg.exec_()
 
-    states = dlg._get_states()
-    print({k: v["state"] for k, v in states.items()})
-    features = dlg.feature_selection()
+    features = dlg.selections()
     for k, v in features.items():
         print(k, v)

@@ -220,17 +220,9 @@ class EdgeTrainingMixin:
 
     def _get_default_feature_selection(self):
         raw_channels = self.topLevelOperatorView.RawData.meta.channel_names
-        raw_is_3D = self.topLevelOperatorView.RawData.meta.getTaggedShape().get("z", 1) > 1
+        raw_is_3d = self.topLevelOperatorView.RawData.meta.getTaggedShape().get("z", 1) > 1
         selected_input_channels = self.topLevelOperatorView.WatershedSelectedInput.meta.channel_names
-        default_features = SimpleEdgeFeatureSelection.default_features(raw_channels, selected_input_channels, raw_is_3D)
-
-        selected_features = {chan: set() for chan in raw_channels + selected_input_channels}
-        for group_features in default_features.values():
-            if group_features["state"]:
-                for channel, features in group_features["features"].items():
-                    selected_features[channel] |= set(features)
-
-        return {k: list(v) for k, v in selected_features.items()}
+        return SimpleEdgeFeatureSelection.default_features(raw_channels, selected_input_channels, raw_is_3d)
 
     def _open_feature_selection_dlg(self):
         if not self.topLevelOperatorView.FeatureNames.ready():
@@ -256,6 +248,7 @@ class EdgeTrainingMixin:
         raw_channels = self.topLevelOperatorView.RawData.meta.channel_names
         selected_input_channels = self.topLevelOperatorView.WatershedSelectedInput.meta.channel_names
         probability_channels = [x for x in channel_names if x not in raw_channels + selected_input_channels]
+        raw_is_3d = self.topLevelOperatorView.RawData.meta.getTaggedShape().get("z", 1) > 1
 
         dlg = SimpleEdgeFeatureSelection(
             raw_channels,
@@ -263,6 +256,7 @@ class EdgeTrainingMixin:
             probability_channels,
             initial_selections,
             supported_features=feature_names,
+            data_is_3d=raw_is_3d,
             parent=self,
         )
         res = dlg.exec_()
@@ -270,8 +264,6 @@ class EdgeTrainingMixin:
             return
 
         new_selections = dlg.selections()
-        print(">>>> feat_vals")
-        print(">>>> selection", dlg.selections())
 
         self.topLevelOperatorView.FeatureNames.setValue(new_selections)
 
