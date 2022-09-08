@@ -51,6 +51,7 @@ class SimpleEdgeFeatureSelection(QDialog):
         self.supported_features = supported_features
         # self.default_features = []
 
+        self._current_selection = selection
         if selection:
             checks = self._checkmarks(self.feat_vals, selection)
             for check, val in checks.items():
@@ -126,6 +127,15 @@ class SimpleEdgeFeatureSelection(QDialog):
 
         if not self.check_selection_compatible_with_dlg_features(self.feat_vals, selection):
             self.setCheckboxesEnabled(False)
+
+    def setFeatures(self, feaures):
+        # set some internal feature variable -
+        self._current_selection = features
+
+        # now update the checkmarks if necessary
+
+    def getFeatures():
+        pass
 
     def setCheckboxesEnabled(self, state: bool):
         """
