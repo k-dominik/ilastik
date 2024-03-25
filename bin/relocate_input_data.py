@@ -9,8 +9,8 @@ from typing import Annotated, Any, Dict, List, Literal, Optional, Tuple, Union
 import annotated_types
 import h5py
 from pydantic import BaseModel, BeforeValidator, Field, StringConstraints
-from PyQt5.QtCore import QAbstractTableModel, QModelIndex, QPersistentModelIndex, Qt
-from PyQt5.QtGui import QColor, QColorConstants, QContextMenuEvent, QPainter
+from PyQt5.QtCore import QAbstractTableModel, QModelIndex, QPersistentModelIndex, Qt, QUrl, pyqtSignal
+from PyQt5.QtGui import QColor, QColorConstants, QContextMenuEvent, QDragMoveEvent, QPainter
 from PyQt5.QtWidgets import (
     QApplication,
     QDialog,
@@ -62,6 +62,9 @@ class VigraAxisTags(BaseModel):
 
 LaneName = Annotated[str, StringConstraints(pattern=r"lane\d{4}")]
 
+RELATIVE_CLASS = "RelativeFilesystemDatasetInfo"
+ABSOLUTE_CLASS = "FilesystemDatasetInfo"
+
 
 class DatasetInfo(BaseModel):
     allow_labels: Annotated[bool, BeforeValidator(single_from_ds)] = Field(alias="allowLabels")
@@ -111,8 +114,23 @@ class DatasetInfo(BaseModel):
         ilp_loc = self.__ilp_file.parent
         return ilp_loc in fp.parents
 
-    def replace_filepath(self, fp):
-        self._replace_path = fp
+    def replace_filepath(self, fp: Path, try_relative: bool = False):
+        if try_relative or self.klass == RELATIVE_CLASS:
+
+            ilp_loc = self.__ilp_file.parent
+            try:
+                new_path = fp.relative_to(ilp_loc)
+                new_klass = RELATIVE_CLASS
+
+            except ValueError:
+                new_path = fp
+                new_klass = ABSOLUTE_CLASS
+
+            self.file_path = new_path
+            self.klass = new_klass
+
+        else:
+            self.file_path = fp
 
 
 class InputData(BaseModel):
@@ -174,7 +192,7 @@ class InputDataModel(QAbstractTableModel):
                 return row_data.link_type
 
             if idx_col == 3:
-                return row_data.file_exists
+                return "✅" if row_data.file_exists else "❌"
 
             assert False
 
@@ -226,15 +244,15 @@ class CustomItemDelegate(QStyledItemDelegate):
             current_value = row_data.location
             original_value = original_row_data.location
         elif idx_col == 3:
-            current_value = row_data.file_exists
-            original_value = original_row_data.file_exists
+            current_value = "✅" if row_data.file_exists else "❌"
+            original_value = "✅" if original_row_data.file_exists else "❌"
 
         if current_value != original_value:
             painter.save()
             painter.setPen(QColor("red"))
-            painter.drawText(option.rect, Qt.AlignTop, str(original_value))
+            painter.drawText(option.rect, Qt.AlignTop, f"\t{original_value}")
             painter.setPen(QColor("green"))
-            painter.drawText(option.rect, Qt.AlignBottom, str(current_value))
+            painter.drawText(option.rect, Qt.AlignBottom, f"\t{current_value}")
             painter.restore()
         else:
             QStyledItemDelegate.paint(self, painter, option, index)
@@ -269,8 +287,33 @@ class ChangeInfoCommand(QUndoCommand):
 
 
 class InputDataView(QTableView):
+
+    replacePathEvent = pyqtSignal(int, Path)  # row, path
+
     def contextMenuEvent(self, a0: QContextMenuEvent) -> None:
         return super().contextMenuEvent(a0)
+
+    def dragEnterEvent(self, a0):
+        # Only accept drag-and-drop events that consist of urls to local files.
+        if not a0.mimeData().hasUrls():
+            return
+        urls = a0.mimeData().urls()
+        if len(urls) != 1:
+            return
+        if all(map(QUrl.isLocalFile, urls)):
+            a0.acceptProposedAction()
+
+    def dragMoveEvent(self, a0: QDragMoveEvent):
+        pass
+
+    def dropEvent(self, a0):
+        file_paths = [Path(QUrl.toLocalFile(url)) for url in a0.mimeData().urls()]
+
+        idx_row = self.rowAt(a0.pos().y())
+        # Last row is the button.
+        if idx_row == -1:
+            return
+        self.replacePathEvent.emit(idx_row, file_paths[0])
 
 
 class BulkChangeDialog(QDialog):
@@ -298,6 +341,7 @@ class BulkChangeDialog(QDialog):
         removeButton = QPushButton("-")
         removeButton.clicked.connect(self.removeFile)
         btn_layout.addWidget(removeButton)
+        btn_layout.addStretch()
 
         list_layout.addLayout(btn_layout)
 
@@ -334,8 +378,6 @@ class PathApp(QWidget):
         with h5py.File(self._ilp_file, "r") as f:
             data = InputData.model_validate(f[INPUT_DATA_PATH], context={"ilp_file": self._ilp_file})
 
-        self._data = data
-
         self.model = InputDataModel(data)
 
         self.initUI()
@@ -344,10 +386,11 @@ class PathApp(QWidget):
         self._layout = QVBoxLayout()
         self.setLayout(self._layout)
 
-        table = QTableView()
-
+        table = InputDataView()
+        table.setAcceptDrops(True)
         # Set model for the table view
         table.setModel(self.model)
+        table.replacePathEvent.connect(self._change_path)
 
         delegate = CustomItemDelegate()
         table.setItemDelegate(delegate)
@@ -370,35 +413,37 @@ class PathApp(QWidget):
 
     def changePath(self):
         index = self.table.currentIndex()
+        idx_row = index.row()
 
         if index.isValid():
-            idx_row = index.row()
-            data_keys = index.model()._row_keys[idx_row]
-
-            new_data = index.model()._data
-            orig_data = new_data.copy(deep=True)
-            new_path = QFileDialog.getOpenFileName(
-                self, f"Replace `{new_data.infos[data_keys[0]][data_keys[1]].file_path!r}`"
-            )[0]
+            new_path = QFileDialog.getOpenFileName(self, f"Select image file")[0]
             if new_path:
-                new_data.infos[data_keys[0]][data_keys[1]].file_path = Path(new_path)
-                command = ChangeInfoCommand(index=index, orig=orig_data, new=new_data)
-                self._undo_stack.push(command)
+                self._change_path(idx_row, new_path)
+
+    def _change_path(self, idx_row, new_path):
+        print("change path", idx_row, new_path)
+        index = self.table.currentIndex()
+        if index.isValid():
+            data_keys = index.model()._row_keys[idx_row]
+            new_data = index.model()._data.copy(deep=True)
+            orig_data = new_data.copy(deep=True)
+            new_data.infos[data_keys[0]][data_keys[1]].replace_filepath(Path(new_path))
+            command = ChangeInfoCommand(index=index, orig=orig_data, new=new_data)
+            self._undo_stack.push(command)
 
     def bulk_change(self):
         dlg = BulkChangeDialog(data=self.model._data)
         dlg.exec()
 
-        print(dlg.selected_paths())
+        selected_paths = dlg.selected_paths()
+        if not selected_paths:
+            return
 
     def undo(self):
-        idx = self._undo_stack.index()
-        self._undo_stack.setIndex(idx - 1)
+        idx = self._undo_stack.undo()
 
     def redo(self):
-        cap = self._undo_stack.count()
-        idx = self._undo_stack.index()
-        self._undo_stack.setIndex(min(cap, idx + 1))
+        self._undo_stack.redo()
 
 
 if __name__ == "__main__":
