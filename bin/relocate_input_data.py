@@ -4,27 +4,28 @@ import sys
 import warnings
 from argparse import ArgumentParser
 from pathlib import Path
-from typing import Annotated, Dict, List, Literal, Optional, Tuple, Any
+from typing import Annotated, Any, Dict, List, Literal, Optional, Tuple, Union
 
 import annotated_types
 import h5py
-from pydantic import BaseModel, BeforeValidator, Field, StringConstraints, computed_field
-from PyQt5.QtCore import Qt, QSize, QAbstractTableModel, QModelIndex
-from PyQt5.QtGui import QStandardItem, QStandardItemModel, QPainter, QColorConstants, QColor
+from pydantic import BaseModel, BeforeValidator, Field, StringConstraints
+from PyQt5.QtCore import QAbstractTableModel, QModelIndex, QPersistentModelIndex, Qt
+from PyQt5.QtGui import QColor, QColorConstants, QContextMenuEvent, QPainter
 from PyQt5.QtWidgets import (
-    QItemDelegate,
     QApplication,
+    QDialog,
     QFileDialog,
     QListView,
+    QListWidget,
     QPushButton,
+    QStyledItemDelegate,
+    QTableView,
     QUndoCommand,
     QUndoStack,
     QVBoxLayout,
+    QHBoxLayout,
     QWidget,
-    QAbstractItemView,
-    QStyle,
-    QTableView,
-    QStyledItemDelegate,
+    QDialogButtonBox,
 )
 
 INPUT_DATA_PATH = "Input Data"
@@ -87,12 +88,28 @@ class DatasetInfo(BaseModel):
 
     @property
     def file_exists(self):
+        fp = self.full_path
+        return fp.exists()
+
+    @property
+    def link_type(self) -> str:
         if "relative" in self.klass.lower():
-            f = self.__ilp_file.parent / self.file_path
+            return "relative"
         else:
-            f = self.file_path
-        print(f, f.exists())
-        return f.exists()
+            return "absolute"
+
+    @property
+    def full_path(self) -> Path:
+        if "relative" in self.klass.lower():
+            return self.__ilp_file.parent / self.file_path
+
+        return self.file_path
+
+    @property
+    def can_relative(self) -> bool:
+        fp = self.full_path
+        ilp_loc = self.__ilp_file.parent
+        return ilp_loc in fp.parents
 
     def replace_filepath(self, fp):
         self._replace_path = fp
@@ -117,7 +134,7 @@ class Columns(enum.IntEnum):
     DESCRIPTION = 2
 
 
-class TableModel(QAbstractTableModel):
+class InputDataModel(QAbstractTableModel):
     def __init__(self, data: InputData):
         super().__init__()
         self._data = data
@@ -154,39 +171,34 @@ class TableModel(QAbstractTableModel):
                 return str(row_data.file_path)
 
             if idx_col == 2:
-                return row_data.location
+                return row_data.link_type
 
             if idx_col == 3:
                 return row_data.file_exists
 
             assert False
 
-    def setData(self, index: QModelIndex, value: Any, role: int = Qt.EditRole) -> bool:
-        if index.isValid() and role == Qt.EditRole:
-            row = self._data[index.row()]
-            column = index.column()
-            if column == 0:
-                row.original["filename"] = row.filename
-                row.filename = value
-            elif column == 1:
-                row.original["shape"] = row.shape
-                row.shape = value
-            elif column == 2:
-                row.original["description"] = row.description
-                row.description = value
-            self.dataChanged.emit(index, index, [role])
-            return True
-        return False
+    # def setData(self, index: QModelIndex, value: Any, role: int = Qt.EditRole) -> bool:
+    #     if index.isValid() and role == Qt.EditRole:
+    #         ...
+    #         self.dataChanged.emit(index, index, [role])
+    #         return True
+    #     return False
 
     def flags(self, index):
-        if index.column() == 1:
-            return super().flags(index) | Qt.ItemIsEditable
+        # if index.column() == 1:
+        #     return super().flags(index) | Qt.ItemIsEditable
 
         return super().flags(index)
 
     def headerData(self, section, orientation, role):
         if role == Qt.DisplayRole and orientation == Qt.Horizontal:
             return self._headers[section]
+
+    def itemFromIndex(self, index):
+        idx_row = index.row()
+        data_keys = self._row_keys[idx_row]
+        return self._data.infos[data_keys[0]][data_keys[1]]
 
 
 class CustomItemDelegate(QStyledItemDelegate):
@@ -220,29 +232,97 @@ class CustomItemDelegate(QStyledItemDelegate):
         if current_value != original_value:
             painter.save()
             painter.setPen(QColor("red"))
-            painter.drawText(option.rect, Qt.AlignTop, original_value)
+            painter.drawText(option.rect, Qt.AlignTop, str(original_value))
             painter.setPen(QColor("green"))
-            painter.drawText(option.rect, Qt.AlignBottom, current_value)
+            painter.drawText(option.rect, Qt.AlignBottom, str(current_value))
             painter.restore()
         else:
             QStyledItemDelegate.paint(self, painter, option, index)
 
 
-# class ChangeInfoCommand(QUndoCommand):
-#     def __init__(self, parent=None, *, item: DataSetInfoItem, new_info: DatasetInfo):
-#         super().__init__(parent)
-#         self._item = item
-#         self._old_info = item.info
-#         self._new_info = new_info
+class ChangeInfoCommand(QUndoCommand):
+    def __init__(self, parent=None, *, index: QModelIndex, orig: InputData, new: InputData):
+        super().__init__(parent)
+        self._index = QPersistentModelIndex(index)
+        self._old_input_info = orig
+        self._new_input_info = new
 
-#     def redo(self):
-#         self._item.info = self._new_info
-#         self._item.emitDataChanged()
+    def redo(self):
+        assert self._index.isValid()
 
-#     def undo(self):
-#         undo_data = self._old_info
-#         self._item.info = undo_data
-#         self._item.emitDataChanged()
+        self._index.model()._data = self._new_input_info
+
+        change_start = self._index.model().index(0, 0)
+        change_stop = self._index.model().index(self._index.model().rowCount(), self._index.model().columnCount())
+
+        self._index.model().dataChanged.emit(change_start, change_stop)
+
+    def undo(self):
+        assert self._index.isValid()
+
+        self._index.model()._data = self._old_input_info
+
+        change_start = self._index.model().index(0, 0)
+        change_stop = self._index.model().index(self._index.model().rowCount(), self._index.model().columnCount())
+
+        self._index.model().dataChanged.emit(change_start, change_stop)
+
+
+class InputDataView(QTableView):
+    def contextMenuEvent(self, a0: QContextMenuEvent) -> None:
+        return super().contextMenuEvent(a0)
+
+
+class BulkChangeDialog(QDialog):
+    def __init__(self, data: InputData, parent: Optional[QWidget] = None) -> None:
+        super().__init__(parent)
+        self._data = data
+
+        self.setupUi()
+
+    def setupUi(self):
+        self._layout = QVBoxLayout()
+
+        list_layout = QHBoxLayout()
+
+        self.list_widget = QListWidget()
+
+        list_layout.addWidget(self.list_widget)
+
+        btn_layout = QVBoxLayout()
+
+        addButton = QPushButton("+")
+        addButton.clicked.connect(self.addFile)
+        btn_layout.addWidget(addButton)
+
+        removeButton = QPushButton("-")
+        removeButton.clicked.connect(self.removeFile)
+        btn_layout.addWidget(removeButton)
+
+        list_layout.addLayout(btn_layout)
+
+        self._layout.addLayout(list_layout)
+
+        default_buttons = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
+        default_buttons.accepted.connect(self.accept)
+        default_buttons.rejected.connect(self.reject)
+        self._layout.addWidget(default_buttons)
+
+        self.setLayout(self._layout)
+
+        self.list_widget.setDragDropMode(QListWidget.InternalMove)
+
+    def addFile(self):
+        filePath = QFileDialog.getExistingDirectory(self, "Select Folder", "")
+        if filePath:
+            self.list_widget.addItem(filePath)
+
+    def removeFile(self):
+        for selectedItem in self.list_widget.selectedItems():
+            self.list_widget.takeItem(self.list_widget.row(selectedItem))
+
+    def selected_paths(self) -> List[Path]:
+        return [Path(self.list_widget.item(idx).text()) for idx in range(self.list_widget.count())]
 
 
 class PathApp(QWidget):
@@ -256,7 +336,7 @@ class PathApp(QWidget):
 
         self._data = data
 
-        self.model = TableModel(data)
+        self.model = InputDataModel(data)
 
         self.initUI()
 
@@ -273,11 +353,11 @@ class PathApp(QWidget):
         table.setItemDelegate(delegate)
 
         self.table = table
-        # self.table.doubleClicked.connect(self.changePath)
+        self.table.doubleClicked.connect(self.changePath)
         self._layout.addWidget(self.table)
 
-        self.change_button = QPushButton("Change Path")
-        # self.change_button.clicked.connect(self.changePath)
+        self.change_button = QPushButton("Bulk Change")
+        self.change_button.clicked.connect(self.bulk_change)
         self._layout.addWidget(self.change_button)
 
         self.undo_button = QPushButton("Undo")
@@ -288,16 +368,28 @@ class PathApp(QWidget):
         self.redo_button.clicked.connect(self.redo)
         self._layout.addWidget(self.redo_button)
 
-    # def changePath(self):
-    #     index = self.table.currentIndex()
-    #     if index.isValid():
-    #         info: DatasetInfoItem = self.model.itemFromIndex(index)
-    #         new_info = info.info.copy(deep=True)
-    #         new_path = QFileDialog.getOpenFileName(self, f"Replace `{new_info.file_path!r}`")[0]
-    #         if new_path:
-    #             new_info.file_path = Path(new_path)
-    #             command = ChangeInfoCommand(item=info, new_info=new_info)
-    #             self._undo_stack.push(command)
+    def changePath(self):
+        index = self.table.currentIndex()
+
+        if index.isValid():
+            idx_row = index.row()
+            data_keys = index.model()._row_keys[idx_row]
+
+            new_data = index.model()._data
+            orig_data = new_data.copy(deep=True)
+            new_path = QFileDialog.getOpenFileName(
+                self, f"Replace `{new_data.infos[data_keys[0]][data_keys[1]].file_path!r}`"
+            )[0]
+            if new_path:
+                new_data.infos[data_keys[0]][data_keys[1]].file_path = Path(new_path)
+                command = ChangeInfoCommand(index=index, orig=orig_data, new=new_data)
+                self._undo_stack.push(command)
+
+    def bulk_change(self):
+        dlg = BulkChangeDialog(data=self.model._data)
+        dlg.exec()
+
+        print(dlg.selected_paths())
 
     def undo(self):
         idx = self._undo_stack.index()
