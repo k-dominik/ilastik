@@ -1,15 +1,16 @@
+import enum
 import json
 import sys
 import warnings
 from argparse import ArgumentParser
 from pathlib import Path
-from typing import Annotated, Dict, List, Literal, Optional, Tuple
+from typing import Annotated, Dict, List, Literal, Optional, Tuple, Any
 
 import annotated_types
 import h5py
 from pydantic import BaseModel, BeforeValidator, Field, StringConstraints, computed_field
-from PyQt5.QtCore import Qt, QSize
-from PyQt5.QtGui import QStandardItem, QStandardItemModel, QPainter, QColorConstants
+from PyQt5.QtCore import Qt, QSize, QAbstractTableModel, QModelIndex
+from PyQt5.QtGui import QStandardItem, QStandardItemModel, QPainter, QColorConstants, QColor
 from PyQt5.QtWidgets import (
     QItemDelegate,
     QApplication,
@@ -22,6 +23,8 @@ from PyQt5.QtWidgets import (
     QWidget,
     QAbstractItemView,
     QStyle,
+    QTableView,
+    QStyledItemDelegate,
 )
 
 INPUT_DATA_PATH = "Input Data"
@@ -103,71 +106,143 @@ class InputData(BaseModel):
     ]
 
 
-class DataSetInfoItem(QStandardItem):
-    def __init__(self, text: str, info: DatasetInfo):
-        super().__init__(text)
-        self.info = info
-        self.title = text
-
-    def data(self, role=Qt.DisplayRole):
-        if role == Qt.DisplayRole:
-            return self.info
-        elif role == Qt.UserRole:
-            return self.title
-        return super().data(role)
-
-
 NROWS = 5
 ROWNUDGE = 5
 LEFTNUDGE = 5
 
 
-class DatasetInfoDelegate(QItemDelegate):
-    def paint(self, painter: QPainter, option, index):
-        rect = option.rect
-        data: DatasetInfo = index.data()
-        title: str = index.data(Qt.UserRole)
-
-        tagged_shape = dict(zip([ax.key for ax in data.axistags], data.shape))
-
-        if not data.file_exists:
-            painter.fillRect(option.rect, QColorConstants.Svg.lightpink)
-
-        if bool(option.state & QStyle.State_MouseOver):
-            painter.fillRect(option.rect, option.palette.highlight())
-
-        font = painter.font()
-        font.setBold(True)
-        painter.setFont(font)
-        painter.drawText(LEFTNUDGE + rect.x(), rect.y() + rect.height() // NROWS + ROWNUDGE, title)
-
-        font.setBold(False)
-        painter.setFont(font)
-        painter.drawText(LEFTNUDGE + rect.x(), rect.y() + 2.5 * rect.height() // NROWS, str(data.file_path))
-        painter.drawText(LEFTNUDGE + rect.x(), rect.y() + 3.5 * rect.height() // NROWS, str(data.klass))
-        painter.drawText(LEFTNUDGE + rect.x(), rect.y() + 5 * rect.height() // NROWS - ROWNUDGE, str(tagged_shape))
-
-        painter.drawRect(rect)
-
-    def sizeHint(self, option, index):
-        return QSize(option.rect.width(), NROWS * 20 + 10)
+class Columns(enum.IntEnum):
+    LANE = 0
+    FILEPATH = 1
+    DESCRIPTION = 2
 
 
-class ChangeInfoCommand(QUndoCommand):
-    def __init__(self, parent=None, *, item: DataSetInfoItem, new_info: DatasetInfo):
-        super().__init__(parent)
-        self._item = item
-        self._old_info = item.info
-        self._new_info = new_info
+class TableModel(QAbstractTableModel):
+    def __init__(self, data: InputData):
+        super().__init__()
+        self._data = data
+        self._original_data = data.copy(deep=True)
+        self._row_keys = []
+        for lane_key, dataset_infos in data.infos.items():
+            for role_name, info in dataset_infos.items():
+                if not info:
+                    continue
 
-    def redo(self):
-        self._item.info = self._new_info
-        self._item.emitDataChanged()
+                self._row_keys.append((lane_key, role_name))
 
-    def undo(self):
-        undo_data = self._old_info
-        self._item.info = undo_data
-        self._item.emitDataChanged()
+        self._headers = ["Lane", "Filename", "Link Type", "Found"]
+
+    def rowCount(self, parent=None):
+        return len(self._row_keys)
+
+    def columnCount(self, parent=None):
+        return len(self._headers)
+
+    def data(self, index, role):  # type: ignore[reportIncompatibleMethodOverride]
+        if role in (Qt.DisplayRole, Qt.EditRole):
+            idx_row = index.row()
+            idx_col = index.column()
+            data_keys = self._row_keys[idx_row]
+
+            if idx_col == 0:
+                return f"{data_keys[0]}-{data_keys[1]}"
+
+            row_data = self._data.infos[data_keys[0]][data_keys[1]]
+            assert row_data
+
+            if idx_col == 1:
+                return str(row_data.file_path)
+
+            if idx_col == 2:
+                return row_data.location
+
+            if idx_col == 3:
+                return row_data.file_exists
+
+            assert False
+
+    def setData(self, index: QModelIndex, value: Any, role: int = Qt.EditRole) -> bool:
+        if index.isValid() and role == Qt.EditRole:
+            row = self._data[index.row()]
+            column = index.column()
+            if column == 0:
+                row.original["filename"] = row.filename
+                row.filename = value
+            elif column == 1:
+                row.original["shape"] = row.shape
+                row.shape = value
+            elif column == 2:
+                row.original["description"] = row.description
+                row.description = value
+            self.dataChanged.emit(index, index, [role])
+            return True
+        return False
+
+    def flags(self, index):
+        if index.column() == 1:
+            return super().flags(index) | Qt.ItemIsEditable
+
+        return super().flags(index)
+
+    def headerData(self, section, orientation, role):
+        if role == Qt.DisplayRole and orientation == Qt.Horizontal:
+            return self._headers[section]
+
+
+class CustomItemDelegate(QStyledItemDelegate):
+    def paint(self, painter: QPainter, option, index: QModelIndex):
+        idx_row = index.row()
+        idx_col = index.column()
+        data_keys = index.model()._row_keys[idx_row]
+
+        row_data = index.model()._data.infos[data_keys[0]][data_keys[1]]
+        original_row_data = index.model()._original_data.infos[data_keys[0]][data_keys[1]]
+
+        idx_col = index.column()
+
+        original_value = None
+        current_value = None
+
+        if idx_col == 0:
+            # these two will not change (we do not allow reordering)
+            current_value = f"{data_keys[0]}-{data_keys[1]}"
+            original_value = f"{data_keys[0]}-{data_keys[1]}"
+        elif idx_col == 1:
+            current_value = row_data.file_path
+            original_value = original_row_data.file_path
+        elif idx_col == 2:
+            current_value = row_data.location
+            original_value = original_row_data.location
+        elif idx_col == 3:
+            current_value = row_data.file_exists
+            original_value = original_row_data.file_exists
+
+        if current_value != original_value:
+            painter.save()
+            painter.setPen(QColor("red"))
+            painter.drawText(option.rect, Qt.AlignTop, original_value)
+            painter.setPen(QColor("green"))
+            painter.drawText(option.rect, Qt.AlignBottom, current_value)
+            painter.restore()
+        else:
+            QStyledItemDelegate.paint(self, painter, option, index)
+
+
+# class ChangeInfoCommand(QUndoCommand):
+#     def __init__(self, parent=None, *, item: DataSetInfoItem, new_info: DatasetInfo):
+#         super().__init__(parent)
+#         self._item = item
+#         self._old_info = item.info
+#         self._new_info = new_info
+
+#     def redo(self):
+#         self._item.info = self._new_info
+#         self._item.emitDataChanged()
+
+#     def undo(self):
+#         undo_data = self._old_info
+#         self._item.info = undo_data
+#         self._item.emitDataChanged()
 
 
 class PathApp(QWidget):
@@ -181,30 +256,28 @@ class PathApp(QWidget):
 
         self._data = data
 
-        self.model = QStandardItemModel()
+        self.model = TableModel(data)
 
-        for lane_id, infos in self._data.infos.items():
-            for role, info in infos.items():
-                if info is None:
-                    continue
-                self.model.appendRow(DataSetInfoItem(f"{lane_id}-{role}", info))
         self.initUI()
 
     def initUI(self):
         self._layout = QVBoxLayout()
         self.setLayout(self._layout)
 
-        self.view = QListView()
-        self.view.setModel(self.model)
-        self.view.setItemDelegate(DatasetInfoDelegate(self))
-        self.view.setEditTriggers(QAbstractItemView.NoEditTriggers)
-        self.view.setSpacing(5)
-        self.view.setMouseTracking(True)
-        self.view.doubleClicked.connect(self.changePath)
-        self._layout.addWidget(self.view)
+        table = QTableView()
+
+        # Set model for the table view
+        table.setModel(self.model)
+
+        delegate = CustomItemDelegate()
+        table.setItemDelegate(delegate)
+
+        self.table = table
+        # self.table.doubleClicked.connect(self.changePath)
+        self._layout.addWidget(self.table)
 
         self.change_button = QPushButton("Change Path")
-        self.change_button.clicked.connect(self.changePath)
+        # self.change_button.clicked.connect(self.changePath)
         self._layout.addWidget(self.change_button)
 
         self.undo_button = QPushButton("Undo")
@@ -215,16 +288,16 @@ class PathApp(QWidget):
         self.redo_button.clicked.connect(self.redo)
         self._layout.addWidget(self.redo_button)
 
-    def changePath(self):
-        index = self.view.currentIndex()
-        if index.isValid():
-            info: DatasetInfoItem = self.model.itemFromIndex(index)
-            new_info = info.info.copy(deep=True)
-            new_path = QFileDialog.getOpenFileName(self, f"Replace `{new_info.file_path!r}`")[0]
-            if new_path:
-                new_info.file_path = Path(new_path)
-                command = ChangeInfoCommand(item=info, new_info=new_info)
-                self._undo_stack.push(command)
+    # def changePath(self):
+    #     index = self.table.currentIndex()
+    #     if index.isValid():
+    #         info: DatasetInfoItem = self.model.itemFromIndex(index)
+    #         new_info = info.info.copy(deep=True)
+    #         new_path = QFileDialog.getOpenFileName(self, f"Replace `{new_info.file_path!r}`")[0]
+    #         if new_path:
+    #             new_info.file_path = Path(new_path)
+    #             command = ChangeInfoCommand(item=info, new_info=new_info)
+    #             self._undo_stack.push(command)
 
     def undo(self):
         idx = self._undo_stack.index()
