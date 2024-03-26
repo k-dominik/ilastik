@@ -7,28 +7,33 @@ from pathlib import Path
 from typing import Annotated, Any, Dict, List, Literal, Optional, Tuple, Union
 
 import annotated_types
+import fire
 import h5py
-from pydantic import BaseModel, BeforeValidator, Field, StringConstraints
+from pydantic import BaseModel, BeforeValidator, ConfigDict, Field, StringConstraints
 from PyQt5.QtCore import QAbstractTableModel, QModelIndex, QPersistentModelIndex, Qt, QUrl, pyqtSignal
 from PyQt5.QtGui import QColor, QColorConstants, QContextMenuEvent, QDragMoveEvent, QPainter
 from PyQt5.QtWidgets import (
     QApplication,
     QDialog,
+    QDialogButtonBox,
     QFileDialog,
+    QHBoxLayout,
+    QLabel,
     QListView,
     QListWidget,
     QPushButton,
     QStyledItemDelegate,
     QTableView,
+    QTextEdit,
     QUndoCommand,
     QUndoStack,
     QVBoxLayout,
-    QHBoxLayout,
     QWidget,
-    QDialogButtonBox,
 )
 
 INPUT_DATA_PATH = "Input Data"
+GREEN_CHECK = "✅"
+RED_X = "❌"
 
 NDShape = Annotated[Tuple[int, ...], annotated_types.Len(2, 6)]
 
@@ -54,6 +59,8 @@ def data_from_ds(ds):
 
 
 class VigraAxisTags(BaseModel):
+    model_config = ConfigDict(validate_assignment=True)
+
     key: str
     typeFlags: int
     resolution: int
@@ -83,8 +90,6 @@ class DatasetInfo(BaseModel):
     scale_locked: Annotated[Optional[bool], BeforeValidator(single_from_ds)] = None
     working_scale: Annotated[Optional[str], BeforeValidator(decode_ds)] = None
 
-    _replace_path: Optional[Path]
-
     def model_post_init(self, __context):
         print(__context)
         self.__ilp_file = __context["ilp_file"]
@@ -109,6 +114,13 @@ class DatasetInfo(BaseModel):
         return self.file_path
 
     @property
+    def is_relative(self) -> bool:
+        if self.klass == RELATIVE_CLASS:
+            return True
+
+        return False
+
+    @property
     def can_relative(self) -> bool:
         fp = self.full_path
         ilp_loc = self.__ilp_file.parent
@@ -116,7 +128,6 @@ class DatasetInfo(BaseModel):
 
     def replace_filepath(self, fp: Path, try_relative: bool = False):
         if try_relative or self.klass == RELATIVE_CLASS:
-
             ilp_loc = self.__ilp_file.parent
             try:
                 new_path = fp.relative_to(ilp_loc)
@@ -132,6 +143,9 @@ class DatasetInfo(BaseModel):
         else:
             self.file_path = fp
 
+    def update_ilp_location(self, location: Path):
+        self.__ilp_file = location
+
 
 class InputData(BaseModel):
     role_names: Annotated[List[str], BeforeValidator(deserialize_str_list)] = Field(alias="Role Names")
@@ -139,6 +153,48 @@ class InputData(BaseModel):
     infos: Dict[
         LaneName, Dict[str, Annotated[Optional[DatasetInfo], BeforeValidator(lambda x: None if len(x) == 0 else x)]]
     ]
+
+    def model_post_init(self, __context):
+        self.__ilp_file: Path = __context["ilp_file"]
+
+    @property
+    def ilp(self):
+        return self.__ilp_file
+
+    def update_ilp_location(self, location: Path):
+        self.__ilp_file = location
+
+        for lane_key, dataset_infos in self.infos.items():
+            for role_name, info in dataset_infos.items():
+                if info:
+                    info.update_ilp_location(location)
+
+    def get_summary(self) -> List[str]:
+        summary: List[str] = []
+        link_types: List[str] = []
+        existing: List[bool] = []
+
+        for lane_key, dataset_infos in self.infos.items():
+            for role_name, info in dataset_infos.items():
+                if info:
+                    link_types.append(info.link_type)
+                    existing.append(info.file_exists)
+
+        if all(existing):
+            summary.append(f"{GREEN_CHECK} All {len(existing)} datasets can be reached on your machine.")
+        else:
+            summary.append(
+                f"{RED_X} Problem: not all {len(existing)} datasets can be reached on your machine - missing {len([ex for ex in existing if not ex])}"
+            )
+
+        if all([lnk == RELATIVE_CLASS for lnk in link_types]):
+            summary.append(
+                f"All {len(link_types)} are relative links. The project can be moved on the same, as well as to other machines if data is moved along."
+            )
+        else:
+            summary.append(f"Not all links relative")
+
+        return summary
 
 
 class InputDataModel(QAbstractTableModel):
@@ -181,7 +237,7 @@ class InputDataModel(QAbstractTableModel):
                 return row_data.link_type
 
             if idx_col == 3:
-                return "✅" if row_data.file_exists else "❌"
+                return GREEN_CHECK if row_data.file_exists else RED_X
 
             assert False
 
@@ -230,11 +286,11 @@ class CustomItemDelegate(QStyledItemDelegate):
             current_value = row_data.file_path
             original_value = original_row_data.file_path
         elif idx_col == 2:
-            current_value = row_data.location
-            original_value = original_row_data.location
+            current_value = row_data.link_type
+            original_value = original_row_data.link_type
         elif idx_col == 3:
-            current_value = "✅" if row_data.file_exists else "❌"
-            original_value = "✅" if original_row_data.file_exists else "❌"
+            current_value = GREEN_CHECK if row_data.file_exists else RED_X
+            original_value = GREEN_CHECK if original_row_data.file_exists else RED_X
 
         if current_value != original_value:
             painter.save()
@@ -244,7 +300,7 @@ class CustomItemDelegate(QStyledItemDelegate):
             painter.drawText(option.rect, Qt.AlignBottom, f"\t{current_value}")
             painter.restore()
         else:
-            QStyledItemDelegate.paint(self, painter, option, index)
+            painter.drawText(option.rect, Qt.AlignVCenter, f"\t{original_value}")
 
 
 class ChangeInfoCommand(QUndoCommand):
@@ -275,8 +331,32 @@ class ChangeInfoCommand(QUndoCommand):
         self._index.model().dataChanged.emit(change_start, change_stop)
 
 
-class InputDataView(QTableView):
+class ChangeILPPathCommand(QUndoCommand):
+    def __init__(self, parent=None, *, model, orig: InputData, new: InputData):
+        super().__init__(parent)
 
+        self._model = model
+        self._old_input_info = orig
+        self._new_input_info = new
+
+    def redo(self):
+        self._model._data = self._new_input_info
+
+        change_start = self._model.index(0, 0)
+        change_stop = self._model.index(self._model.rowCount(), self._model.columnCount())
+
+        self._model.dataChanged.emit(change_start, change_stop)
+
+    def undo(self):
+        self._model._data = self._old_input_info
+
+        change_start = self._model.index(0, 0)
+        change_stop = self._model.index(self._model.rowCount(), self._model.columnCount())
+
+        self._model.dataChanged.emit(change_start, change_stop)
+
+
+class InputDataView(QTableView):
     replacePathEvent = pyqtSignal(int, Path)  # row, path
 
     def contextMenuEvent(self, a0: QContextMenuEvent) -> None:
@@ -358,9 +438,57 @@ class BulkChangeDialog(QDialog):
         return [Path(self.list_widget.item(idx).text()) for idx in range(self.list_widget.count())]
 
 
+class SummaryWidget(QWidget):
+    def __init__(self, data: InputDataModel, undo_stack: QUndoStack, parent: Optional["QWidget"] = None) -> None:
+        super().__init__(parent)
+        self._model: InputDataModel = data
+        self._undo_stack = undo_stack
+        self.setupUi()
+        self.update_summary()
+
+        self._model.dataChanged.connect(self.update_summary)
+        self._model.dataChanged.connect(lambda *args, **kwargs: print("should've done", args, kwargs))
+
+    def setupUi(self):
+        self._layout = QVBoxLayout()
+        self.setLayout(self._layout)
+
+        path_layout = QHBoxLayout()
+        self.path_label = QLabel(f".ilp location: {self._model._data.ilp}")
+        path_change_btn = QPushButton("Change ...")
+
+        path_layout.addWidget(self.path_label)
+        path_layout.addWidget(path_change_btn)
+
+        path_change_btn.clicked.connect(self.on_path_change)
+
+        self._text_edit = QTextEdit()
+        self._layout.addWidget(self._text_edit)
+
+        self._layout.addLayout(path_layout)
+
+    def update_summary(self, *args):
+        self._text_edit.clear()
+
+        data = self._model._data
+        summary = data.get_summary()
+        self._text_edit.setText("\n".join(summary))
+
+        self.path_label.setText(f".ilp location: {data.ilp}")
+
+    def on_path_change(self):
+        new_path = QFileDialog.getOpenFileName(self, f"Select ilp-file")[0]
+        if new_path:
+            orig_data = self._model._data.copy(deep=True)
+            new_data = self._model._data.copy(deep=True)
+            new_data.update_ilp_location(Path(new_path))
+            command = ChangeILPPathCommand(model=self._model, orig=orig_data, new=new_data)
+            self._undo_stack.push(command)
+
+
 class PathApp(QWidget):
-    def __init__(self, ilp_file):
-        super().__init__()
+    def __init__(self, ilp_file, parent: Optional["QWidget"] = None):
+        super().__init__(parent)
         self._undo_stack = QUndoStack()
         self._ilp_file = Path(ilp_file)
         assert self._ilp_file.exists()
@@ -374,6 +502,9 @@ class PathApp(QWidget):
     def initUI(self):
         self._layout = QVBoxLayout()
         self.setLayout(self._layout)
+
+        summary = SummaryWidget(self.model, self._undo_stack)
+        self._layout.addWidget(summary)
 
         table = InputDataView()
         table.setAcceptDrops(True)
@@ -412,7 +543,6 @@ class PathApp(QWidget):
                 self._change_path(idx_row, new_path)
 
     def _change_path(self, idx_row, new_path):
-        print("change path", idx_row, new_path)
         index = self.table.currentIndex()
         if index.isValid():
             data_keys = index.model()._row_keys[idx_row]
@@ -431,17 +561,21 @@ class PathApp(QWidget):
             return
 
     def undo(self):
-        idx = self._undo_stack.undo()
+        self._undo_stack.undo()
 
     def redo(self):
         self._undo_stack.redo()
 
 
-if __name__ == "__main__":
+def startup_app(ilp_file: Path):
     app = QApplication(sys.argv)
-    main_window = PathApp(ilp_file="/Users/kutra/test.ilp")
+    main_window = PathApp(ilp_file=ilp_file)
     main_window.show()
     try:
         sys.exit(app.exec_())
     except KeyboardInterrupt:
         sys.exit(0)
+
+
+if __name__ == "__main__":
+    fire.Fire(startup_app)
