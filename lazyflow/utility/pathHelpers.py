@@ -125,6 +125,9 @@ class PathComponents(object):
             oldval = getattr(self, attr)
         object.__setattr__(self, attr, value)
 
+    def has_internal(self) -> bool:
+        return self._extension in self.HDF5_EXTS + self.NPZ_EXTS + self.N5_EXTS
+
     def totalPath(self):
         """
         Return the (reconstructed) totalPath to the dataset.
