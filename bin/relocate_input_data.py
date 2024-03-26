@@ -20,6 +20,7 @@ from PyQt5.QtWidgets import (
     QHBoxLayout,
     QLabel,
     QListWidget,
+    QMessageBox,
     QPushButton,
     QStyledItemDelegate,
     QTableView,
@@ -529,11 +530,15 @@ class PathApp(QWidget):
         self.undo_button.clicked.connect(self.undo)
         btn_layout.addWidget(self.undo_button)
 
-        self._layout.addLayout(btn_layout)
-
         self.redo_button = QPushButton("Redo")
         self.redo_button.clicked.connect(self.redo)
         btn_layout.addWidget(self.redo_button)
+
+        self.write_changes_button = QPushButton("Write changes")
+        self.write_changes_button.clicked.connect(self.update_ilp)
+        btn_layout.addWidget(self.write_changes_button)
+
+        self._layout.addLayout(btn_layout)
         self.setMinimumSize(800, 600)
         self.table.resizeColumnsToContents()
 
@@ -598,6 +603,13 @@ class PathApp(QWidget):
 
     def redo(self):
         self._undo_stack.redo()
+
+    def update_ilp(self):
+        if self.model._data == self.model._original_data:
+            QMessageBox.information(
+                self, "No Changes", f"No changes were made, not updating\n{self.model._data.ilp.as_posix()}"
+            )
+            return
 
 
 def startup_app(ilp_file: Path):
