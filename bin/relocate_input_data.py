@@ -51,7 +51,7 @@ def decode_ds(bin_ds):
 
 
 def at_from_ds(ds):
-    return [VigraAxisTags(**info) for info in json.loads(ds[()].decode())["axes"]]
+    return json.loads(ds[()].decode())["axes"]
 
 
 def single_from_ds(ds):
@@ -62,22 +62,29 @@ def data_from_ds(ds):
     return ds[()]
 
 
-class VigraAxisTags(BaseModel):
-    model_config = ConfigDict(validate_assignment=True)
-
-    key: str
-    typeFlags: int
-    resolution: int
-    description: str
-
-
 LaneName = Annotated[str, StringConstraints(pattern=r"lane\d{4}")]
 
 RELATIVE_CLASS = "RelativeFilesystemDatasetInfo"
 ABSOLUTE_CLASS = "FilesystemDatasetInfo"
 
 
-class DatasetInfo(BaseModel):
+class ILPBase(BaseModel):
+    def model_post_init(self, __context):
+        self._ilp_file = __context["ilp_file"]
+
+    @property
+    def ilp(self):
+        return self._ilp_file
+
+
+class VigraAxisTags(ILPBase):
+    key: str
+    typeFlags: int
+    resolution: int
+    description: str
+
+
+class DatasetInfo(ILPBase):
     allow_labels: Annotated[bool, BeforeValidator(single_from_ds)] = Field(alias="allowLabels")
     axistags: Annotated[List[VigraAxisTags], BeforeValidator(at_from_ds)]
     dataset_id: Annotated[str, BeforeValidator(decode_ds)] = Field(alias="datasetId")
@@ -95,9 +102,6 @@ class DatasetInfo(BaseModel):
     working_scale: Annotated[Optional[str], BeforeValidator(decode_ds)] = None
     _real_filename: Tuple[Path, Optional[Path]]
 
-    def model_post_init(self, __context):
-        self.__ilp_file = __context["ilp_file"]
-
     @property
     def file_exists(self):
         fp = self.ext_path
@@ -113,7 +117,7 @@ class DatasetInfo(BaseModel):
     @property
     def full_path(self) -> Path:
         if "relative" in self.klass.lower():
-            return self.__ilp_file.parent / self.file_path
+            return self._ilp_file.parent / self.file_path
 
         return self.file_path
 
@@ -127,7 +131,7 @@ class DatasetInfo(BaseModel):
     @property
     def can_relative(self) -> bool:
         fp = self.full_path
-        ilp_loc = self.__ilp_file.parent
+        ilp_loc = self._ilp_file.parent
         return ilp_loc in fp.parents
 
     def replace_filepath(self, fp: Path, try_relative=False):
@@ -139,7 +143,7 @@ class DatasetInfo(BaseModel):
             internal = internal.lstrip("/").lstrip("\\")
 
         if try_relative or self.klass == RELATIVE_CLASS:
-            ilp_loc = self.__ilp_file.parent
+            ilp_loc = self._ilp_file.parent
             try:
                 new_path = fp.relative_to(ilp_loc)
                 new_klass = RELATIVE_CLASS
@@ -155,7 +159,7 @@ class DatasetInfo(BaseModel):
             self.file_path = fp / internal if internal else fp
 
     def update_ilp_location(self, location: Path):
-        self.__ilp_file = location
+        self._ilp_file = location
 
     @property
     def ext_path(self):
@@ -168,22 +172,15 @@ class DatasetInfo(BaseModel):
         return Path(pc.internalPath)
 
 
-class InputData(BaseModel):
+class InputData(ILPBase):
     role_names: Annotated[List[str], BeforeValidator(deserialize_str_list)] = Field(alias="Role Names")
     storage_version: Annotated[str, BeforeValidator(decode_ds)] = Field(alias="StorageVersion")
     infos: Dict[
         LaneName, Dict[str, Annotated[Optional[DatasetInfo], BeforeValidator(lambda x: None if len(x) == 0 else x)]]
     ]
 
-    def model_post_init(self, __context):
-        self.__ilp_file: Path = __context["ilp_file"]
-
-    @property
-    def ilp(self):
-        return self.__ilp_file
-
     def update_ilp_location(self, location: Path):
-        self.__ilp_file = location
+        self._ilp_file = location
 
         for lane_key, dataset_infos in self.infos.items():
             for role_name, info in dataset_infos.items():
