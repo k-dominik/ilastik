@@ -141,17 +141,6 @@ class InputData(BaseModel):
     ]
 
 
-NROWS = 5
-ROWNUDGE = 5
-LEFTNUDGE = 5
-
-
-class Columns(enum.IntEnum):
-    LANE = 0
-    FILEPATH = 1
-    DESCRIPTION = 2
-
-
 class InputDataModel(QAbstractTableModel):
     def __init__(self, data: InputData):
         super().__init__()
@@ -410,6 +399,8 @@ class PathApp(QWidget):
         self.redo_button = QPushButton("Redo")
         self.redo_button.clicked.connect(self.redo)
         self._layout.addWidget(self.redo_button)
+        self.setMinimumSize(800, 600)
+        self.table.resizeColumnsToContents()
 
     def changePath(self):
         index = self.table.currentIndex()
