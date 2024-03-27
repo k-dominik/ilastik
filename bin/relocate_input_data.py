@@ -42,23 +42,23 @@ NDShape = Annotated[Tuple[int, ...], annotated_types.Len(2, 6)]
 signal.signal(signal.SIGINT, signal.SIG_DFL)
 
 
-def deserialize_str_list(str_list):
+def deserialize_str_list_from_h5(str_list):
     return [x.decode() for x in str_list]
 
 
-def decode_ds(bin_ds):
+def deserialize_string_from_h5(bin_ds):
     return bin_ds[()].decode()
 
 
-def at_from_ds(ds):
+def deserialize_axistags_from_h5(ds):
     return json.loads(ds[()].decode())["axes"]
 
 
-def single_from_ds(ds):
+def deserialize_singleton_value_from_h5(ds):
     return ds[()]
 
 
-def data_from_ds(ds):
+def deserialize_arraylike_from_h5(ds):
     return ds[()]
 
 
@@ -85,21 +85,25 @@ class VigraAxisTags(ILPBase):
 
 
 class DatasetInfo(ILPBase):
-    allow_labels: Annotated[bool, BeforeValidator(single_from_ds)] = Field(alias="allowLabels")
-    axistags: Annotated[List[VigraAxisTags], BeforeValidator(at_from_ds)]
-    dataset_id: Annotated[str, BeforeValidator(decode_ds)] = Field(alias="datasetId")
+    allow_labels: Annotated[bool, BeforeValidator(deserialize_singleton_value_from_h5)] = Field(alias="allowLabels")
+    axistags: Annotated[List[VigraAxisTags], BeforeValidator(deserialize_axistags_from_h5)]
+    dataset_id: Annotated[str, BeforeValidator(deserialize_string_from_h5)] = Field(alias="datasetId")
     display_mode: Annotated[
         Literal["default", "grayscale", "rgba", "random-colortable", "alpha-modulated", "binary-mask"],
-        BeforeValidator(decode_ds),
+        BeforeValidator(deserialize_string_from_h5),
     ]
-    file_path: Annotated[Path, BeforeValidator(decode_ds)] = Field(alias="filePath")
-    klass: Annotated[str, BeforeValidator(decode_ds)] = Field(alias="__class__")
-    location: Annotated[str, BeforeValidator(decode_ds)]
-    nickname: Annotated[str, BeforeValidator(decode_ds)]
-    shape: Annotated[NDShape, BeforeValidator(lambda x: tuple(x.tolist())), BeforeValidator(data_from_ds)]
-    normalize_display: Annotated[Optional[bool], BeforeValidator(single_from_ds)] = Field(alias="normalizeDisplay")
-    scale_locked: Annotated[Optional[bool], BeforeValidator(single_from_ds)] = None
-    working_scale: Annotated[Optional[str], BeforeValidator(decode_ds)] = None
+    file_path: Annotated[Path, BeforeValidator(deserialize_string_from_h5)] = Field(alias="filePath")
+    klass: Annotated[str, BeforeValidator(deserialize_string_from_h5)] = Field(alias="__class__")
+    location: Annotated[str, BeforeValidator(deserialize_string_from_h5)]
+    nickname: Annotated[str, BeforeValidator(deserialize_string_from_h5)]
+    shape: Annotated[
+        NDShape, BeforeValidator(lambda x: tuple(x.tolist())), BeforeValidator(deserialize_arraylike_from_h5)
+    ]
+    normalize_display: Annotated[Optional[bool], BeforeValidator(deserialize_singleton_value_from_h5)] = Field(
+        alias="normalizeDisplay"
+    )
+    scale_locked: Annotated[Optional[bool], BeforeValidator(deserialize_singleton_value_from_h5)] = None
+    working_scale: Annotated[Optional[str], BeforeValidator(deserialize_string_from_h5)] = None
     _real_filename: Tuple[Path, Optional[Path]]
 
     @property
@@ -173,8 +177,8 @@ class DatasetInfo(ILPBase):
 
 
 class InputData(ILPBase):
-    role_names: Annotated[List[str], BeforeValidator(deserialize_str_list)] = Field(alias="Role Names")
-    storage_version: Annotated[str, BeforeValidator(decode_ds)] = Field(alias="StorageVersion")
+    role_names: Annotated[List[str], BeforeValidator(deserialize_str_list_from_h5)] = Field(alias="Role Names")
+    storage_version: Annotated[str, BeforeValidator(deserialize_string_from_h5)] = Field(alias="StorageVersion")
     infos: Dict[
         LaneName, Dict[str, Annotated[Optional[DatasetInfo], BeforeValidator(lambda x: None if len(x) == 0 else x)]]
     ]
