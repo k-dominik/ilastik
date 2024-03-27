@@ -1,14 +1,15 @@
 import json
+import numbers
 import signal
 import sys
 import warnings
 from pathlib import Path
-from typing import Annotated, Dict, List, Literal, Optional, Tuple
+from typing import Annotated, Dict, List, Literal, Optional, Tuple, Union
 
 import annotated_types
 import fire
 import h5py
-from pydantic import BaseModel, BeforeValidator, ConfigDict, Field, StringConstraints
+from pydantic import BaseModel, BeforeValidator, Field, PlainSerializer, StringConstraints
 from PyQt5.QtCore import QAbstractTableModel, QModelIndex, QPersistentModelIndex, Qt, QUrl, pyqtSignal
 from PyQt5.QtGui import QColor, QColorConstants, QContextMenuEvent, QDragMoveEvent, QPainter
 from PyQt5.QtWidgets import (
@@ -42,6 +43,13 @@ NDShape = Annotated[Tuple[int, ...], annotated_types.Len(2, 6)]
 signal.signal(signal.SIGINT, signal.SIG_DFL)
 
 
+def ensure_encoded(val: Union[str, bytes]) -> bytes:
+    if isinstance(val, str):
+        val = val.encode("utf-8")
+
+    return val
+
+
 def deserialize_str_list_from_h5(str_list):
     return [x.decode() for x in str_list]
 
@@ -62,10 +70,49 @@ def deserialize_arraylike_from_h5(ds):
     return ds[()]
 
 
+def serialize_axistags_to_h5(data: List["VigraAxisTags"]) -> bytes:
+    return json.dumps({"axes": [at.model_dump() for at in data]}).encode("utf-8")
+
+
+def serialize_path_to_h5(data: Path) -> bytes:
+    return data.as_posix().encode("utf-8")
+
+
 LaneName = Annotated[str, StringConstraints(pattern=r"lane\d{4}")]
 
 RELATIVE_CLASS = "RelativeFilesystemDatasetInfo"
 ABSOLUTE_CLASS = "FilesystemDatasetInfo"
+
+
+def write_level(group, dict_repr):
+    for k, v in dict_repr.items():
+        if isinstance(v, dict):
+            new_group = group.create_group(k)
+
+            write_level(new_group, v)
+            continue
+        # TODO: check optional inputs, these should be empty dicts, not None
+        if v is None:
+            new_group = group.create_group(k)
+            continue
+
+        if isinstance(v, (str, bytes)):
+            group.create_dataset(name=k, data=ensure_encoded(v))
+        elif isinstance(v, (list, tuple)):
+            data = []
+            for val in v:
+                if isinstance(val, (str, bytes)):
+                    data.append(ensure_encoded(val))
+                else:
+                    data.append(val)
+
+            group.create_dataset(name=k, data=v)
+        elif isinstance(v, numbers.Number):
+            group.create_dataset(name=k, data=v)
+        else:
+            raise ValueError(f"No clue how to serialize {v} of {type(v)=} to hdf5.")
+
+    return group
 
 
 class ILPBase(BaseModel):
@@ -75,6 +122,35 @@ class ILPBase(BaseModel):
     @property
     def ilp(self):
         return self._ilp_file
+
+    def model_dump_hdf5(
+        self,
+        h5group: h5py.Group,
+        *,
+        mode: Literal["hdf5"] = "hdf5",
+        include=None,
+        exclude=None,
+        by_alias: bool = False,
+        exclude_unset: bool = False,
+        exclude_defaults: bool = False,
+        exclude_none: bool = False,
+        round_trip: bool = False,
+        warnings: bool = True,
+    ) -> h5py.Group:
+        python_model = super().model_dump(
+            mode="python",
+            include=include,
+            exclude=exclude,
+            by_alias=by_alias,
+            exclude_unset=exclude_unset,
+            exclude_defaults=exclude_defaults,
+            exclude_none=exclude_none,
+            round_trip=round_trip,
+            warnings=warnings,
+        )
+
+        write_level(h5group, python_model)
+        return h5group
 
 
 class VigraAxisTags(ILPBase):
@@ -86,13 +162,17 @@ class VigraAxisTags(ILPBase):
 
 class DatasetInfo(ILPBase):
     allow_labels: Annotated[bool, BeforeValidator(deserialize_singleton_value_from_h5)] = Field(alias="allowLabels")
-    axistags: Annotated[List[VigraAxisTags], BeforeValidator(deserialize_axistags_from_h5)]
+    axistags: Annotated[
+        List[VigraAxisTags], BeforeValidator(deserialize_axistags_from_h5), PlainSerializer(serialize_axistags_to_h5)
+    ]
     dataset_id: Annotated[str, BeforeValidator(deserialize_string_from_h5)] = Field(alias="datasetId")
     display_mode: Annotated[
         Literal["default", "grayscale", "rgba", "random-colortable", "alpha-modulated", "binary-mask"],
         BeforeValidator(deserialize_string_from_h5),
     ]
-    file_path: Annotated[Path, BeforeValidator(deserialize_string_from_h5)] = Field(alias="filePath")
+    file_path: Annotated[
+        Path, BeforeValidator(deserialize_string_from_h5), PlainSerializer(serialize_path_to_h5)
+    ] = Field(alias="filePath")
     klass: Annotated[str, BeforeValidator(deserialize_string_from_h5)] = Field(alias="__class__")
     location: Annotated[str, BeforeValidator(deserialize_string_from_h5)]
     nickname: Annotated[str, BeforeValidator(deserialize_string_from_h5)]
@@ -611,6 +691,10 @@ class PathApp(QWidget):
                 self, "No Changes", f"No changes were made, not updating\n{self.model._data.ilp.as_posix()}"
             )
             return
+
+        with h5py.File("/Users/kutra/scratch/test-relocate-out.h5", "w") as f:
+            g = f.create_group(INPUT_DATA_PATH)
+            self.model._data.model_dump_hdf5(g)
 
 
 def startup_app(ilp_file: Path):
