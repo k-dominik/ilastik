@@ -1,3 +1,4 @@
+from datetime import datetime
 import json
 import numbers
 import signal
@@ -130,7 +131,6 @@ class ILPBase(BaseModel):
         mode: Literal["hdf5"] = "hdf5",
         include=None,
         exclude=None,
-        by_alias: bool = False,
         exclude_unset: bool = False,
         exclude_defaults: bool = False,
         exclude_none: bool = False,
@@ -141,7 +141,7 @@ class ILPBase(BaseModel):
             mode="python",
             include=include,
             exclude=exclude,
-            by_alias=by_alias,
+            by_alias=True,
             exclude_unset=exclude_unset,
             exclude_defaults=exclude_defaults,
             exclude_none=exclude_none,
@@ -691,10 +691,18 @@ class PathApp(QWidget):
                 self, "No Changes", f"No changes were made, not updating\n{self.model._data.ilp.as_posix()}"
             )
             return
+        data = self.model._data
 
-        with h5py.File("/Users/kutra/scratch/test-relocate-out.h5", "w") as f:
+        def _create_backup(f: h5py.File, group_in, group_name_out="_backups"):
+            backup_base = f.require_group(name=group_name_out)
+            backup_group = backup_base.create_group(datetime.utcnow().isoformat())
+            f.copy(group_in, backup_group)
+
+        with h5py.File(data.ilp, "a") as f:
+            _create_backup(f, f[INPUT_DATA_PATH])
+            del f[INPUT_DATA_PATH]
             g = f.create_group(INPUT_DATA_PATH)
-            self.model._data.model_dump_hdf5(g)
+            data.model_dump_hdf5(g)
 
 
 def startup_app(ilp_file: Path):
