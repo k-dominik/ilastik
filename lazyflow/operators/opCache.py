@@ -23,6 +23,7 @@ from builtins import object
 ###############################################################################
 
 from abc import abstractmethod, ABCMeta
+from typing import Iterable
 
 # lazyflow
 from lazyflow.operators import cacheMemoryManager
@@ -182,7 +183,7 @@ class ManagedBlockedCache(ManagedCache):
             return max(t)
 
     @abstractmethod
-    def getBlockAccessTimes(self):
+    def getBlockAccessTimes(self) -> Iterable[float]:
         """
         get a list of block ids and their time stamps
         """

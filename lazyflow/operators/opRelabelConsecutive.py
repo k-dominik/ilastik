@@ -18,6 +18,7 @@
 # on the ilastik web site at:
 #          http://ilastik.org/license.html
 ###############################################################################
+import collections
 from functools import partial
 import logging
 from typing import Union
@@ -28,11 +29,15 @@ import vigra
 from lazyflow.graph import InputSlot, Operator, OutputSlot
 from lazyflow.operators.generic import OpPixelOperator
 from lazyflow.operators.opBlockedArrayCache import OpBlockedArrayCache
+from lazyflow.operators.opCache import ManagedBlockedCache
+from lazyflow.operators.opCacheFixer import OpCacheFixer
 from lazyflow.operators.opReorderAxes import OpReorderAxes
+from lazyflow.operators.opSimpleBlockedArrayCache import OpSimpleBlockedArrayCache
 from lazyflow.operators.valueProviders import OpValueCache
-from lazyflow.request.request import Request, RequestPool
+from lazyflow.request.request import Request, RequestLock, RequestPool
 from lazyflow.slot import Slot
-from lazyflow.utility import timeLogged
+from lazyflow.utility import timeLogged, RamMeasurementContext
+
 
 logger = logging.getLogger(__name__)
 
@@ -167,3 +172,51 @@ class OpRelabelConsecutive5DNoCache(Operator):
         self._relable_dict = {}
         self.Output.setDirty(())
         self.RelabelDict.setDirty(())
+
+
+class OpRelabelConsecutive5DCached(OpCachedCompute2outs):
+    OutputDict = OutputSlot()
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(args, kwargs)
+
+    def _execute_Output(self, slot, subindex, roi, result):
+        self._execute_Output_impl2(slot, (roi.start, roi.stop), result)
+
+    def _execute_Output_impl2(self, slot, request_roi, result):
+        raise NotImplementedError()
+
+    def _resetBlocks(self, *_):
+        with self._lock:
+            self._block_data = {"Output": {}, "OutputDict": {}}
+            self._block_locks = {}
+            self._last_access_times = collections.defaultdict(float)
+
+    def usedMemory(self):
+        # TODO
+        total = 0.0
+        for k in list(self._block_data.keys()):
+            try:
+                block = self._block_data["Output"][k]
+                bytes_per_pixel = numpy.dtype(block.dtype).itemsize
+                portion = block.size * bytes_per_pixel
+            except (KeyError, AttributeError):
+                # what could have happened and why it's fine
+                #  * block was deleted (then it does not occupy memory)
+                #  * block is not array data (then we don't know how
+                #    much memory it ouccupies)
+                portion = 0.0
+            total += portion
+        return total
+
+    def freeBlock(self, key):
+        with self._lock:
+            if key not in self._block_locks:
+                return 0
+            block = self._block_data[key]
+            bytes_per_pixel = numpy.dtype(block.dtype).itemsize
+            mem = block.size * bytes_per_pixel
+            del self._block_data[key]
+            del self._block_locks[key]
+            del self._last_access_times[key]
+            return mem
