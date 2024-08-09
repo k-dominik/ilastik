@@ -32,7 +32,7 @@ import vigra.analysis
 
 # lazyflow
 from lazyflow.graph import Operator, InputSlot, OutputSlot
-from lazyflow.operators.opRelabelConsecutive import OpRelabelConsecutive
+from lazyflow.operators.opRelabelConsecutive import OpRelabelConsecutive, OpRelabelConsecutive5DNoCache
 from lazyflow.request import Request, RequestPool
 from lazyflow.slot import Slot
 from lazyflow.stype import Opaque
@@ -429,11 +429,10 @@ class OpObjectExtractionFromLabels(OpObjectExtractionBase):
         self._opRegFeats.ObjectIDMapping.connect(self._opLabelVolume.CachedRelabelDict)
 
     def _create_label_volume_op(self):
-        opLabelVolume = OpRelabelConsecutive(parent=self)
+        opLabelVolume = OpRelabelConsecutive5DNoCache(parent=self)
         opLabelVolume.name = "OpObjectExtraction._opLabelVolume"
 
         opLabelVolume.Input.connect(self.SegmentationImage)
-        opLabelVolume.BypassModeEnabled.connect(self.BypassModeEnabled)
 
         return opLabelVolume
 

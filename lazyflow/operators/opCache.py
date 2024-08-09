@@ -109,11 +109,6 @@ class ObservableCache(Cache):
         """
         return 0.0
 
-    def generateReport(self, memInfoNode):
-        super(ObservableCache, self).generateReport(memInfoNode)
-        memInfoNode.usedMemory = self.usedMemory()
-        memInfoNode.fractionOfUsedMemoryDirty = self.fractionOfUsedMemoryDirty()
-
 
 class ManagedCache(ObservableCache):
     """

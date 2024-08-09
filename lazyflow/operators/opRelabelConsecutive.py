@@ -19,22 +19,26 @@
 #          http://ilastik.org/license.html
 ###############################################################################
 import collections
-from functools import partial
+from functools import lru_cache, partial, wraps
 import logging
-from typing import Union
+import threading
+from typing import Dict, Literal, Optional, Tuple, Union
 
 import numpy
 import vigra
 
+import h5py
+
 from lazyflow.graph import InputSlot, Operator, OutputSlot
 from lazyflow.operators.generic import OpPixelOperator
 from lazyflow.operators.opBlockedArrayCache import OpBlockedArrayCache
-from lazyflow.operators.opCache import ManagedBlockedCache
+from lazyflow.operators.opCache import ManagedBlockedCache, MemInfoNode
 from lazyflow.operators.opCacheFixer import OpCacheFixer
 from lazyflow.operators.opReorderAxes import OpReorderAxes
 from lazyflow.operators.opSimpleBlockedArrayCache import OpSimpleBlockedArrayCache
 from lazyflow.operators.valueProviders import OpValueCache
 from lazyflow.request.request import Request, RequestLock, RequestPool
+from lazyflow.roi import roiToSlice
 from lazyflow.slot import Slot
 from lazyflow.utility import timeLogged, RamMeasurementContext
 
@@ -72,8 +76,9 @@ class OpRelabelConsecutive(Operator):
         self._cache.Input.connect(self._opRelabel.Output)
         self.CleanBlocks.connect(self._cache.CleanBlocks)
 
-        self._relabel_dict_cache = OpValueCache(parent=self)
+        self._relabel_dict_cache = OpBlockedArrayCache(parent=self)
         self._relabel_dict_cache.Input.connect(self._opRelabel.RelabelDict)
+        self._relabel_dict_cache.Blockshape.setValue((1,))
         self.CachedRelabelDict.connect(self._relabel_dict_cache.Output)
 
         self._reoder_to_input_order = OpReorderAxes(parent=self, Input=self._opRelabel.Output, AxisOrder=None)
@@ -113,6 +118,55 @@ class OpRelabelConsecutive(Operator):
         pass
 
 
+class RelabelCache:
+
+    name: str = "RelabelCache"
+
+    def __init__(self, tagged_image_shape, startlabel=1):
+        super().__init__()
+        self.children = []
+        self._tagged_shape = tagged_image_shape
+        self._startlabel = startlabel
+        self._block_locks = {i: threading.RLock() for i in range(tagged_image_shape["t"])}
+
+        self._h5_handle = h5py.File(mode="a", name="test2", driver="core", backing_store=False)
+
+        self._relabel_dict_cache = {}
+
+        shape = tuple(val for val in tagged_image_shape.values())
+        assert "t" in tagged_image_shape
+
+        tagged_chunk_shape = {k: v for k, v in tagged_image_shape.items()}
+        tagged_chunk_shape = {"t": 1, "c": 1, "z": 64, "y": 64, "x": 64}
+
+        chunk_sizes = {ax: min(tagged_image_shape[ax], tagged_chunk_shape[ax]) for ax in tagged_image_shape.keys()}
+        chunks = tuple(chunk_sizes.values())
+        self._relabeled_image_cache = self._h5_handle.create_dataset(
+            "relabel", shape=shape, chunks=chunks, compression="gzip"
+        )
+
+    def __call__(self, tagged_request_roi: Dict[Literal["t", "z", "y", "x", "c"], slice], label_image_slot: InputSlot):
+        t = tagged_request_roi["t"]
+        assert t.stop - t.start == 1
+        with self._block_locks[t.start]:
+            if t.start in self._relabel_dict_cache:
+                return self._relabeled_image_cache[t.start], self._relabel_dict_cache[t.start]
+
+            # do the computation first by expanding the roi
+            whole_slice_request_roi = {k: v for k, v in tagged_request_roi.items()}
+            for ax in "zyx":
+                whole_slice_request_roi[ax] = slice(0, self._tagged_shape[ax])
+
+            img = label_image_slot[tuple(whole_slice_request_roi.values())].wait().squeeze()
+            breakpoint()
+            _, __, labelmap_dict = vigra.analysis.relabelConsecutive(
+                img, start_label=self._startlabel, keep_zeros=True, out=img
+            )
+            self._relabel_dict_cache[t.start] = labelmap_dict
+            self._relabeled_image_cache[t.start] = img.withAxes("".join(tagged_request_roi.keys()))
+            return img, labelmap_dict
+
+
 class OpRelabelConsecutive5DNoCache(Operator):
     Input = InputSlot()  # in "tzyxc" order
     StartLabel = InputSlot()
@@ -136,31 +190,32 @@ class OpRelabelConsecutive5DNoCache(Operator):
         self.RelabelDict.meta.dtype = object
         self.RelabelDict.meta.axistags = vigra.defaultAxistags("t")
 
-        self._relable_dict = {}
+        self._cached_fun = RelabelCache(self.Input.meta.getTaggedShape(), startlabel=self.StartLabel.value)
 
     @timeLogged(logger)
     def execute(self, slot, subindex, roi, result):
         t_idx = self.Input.meta.getAxisKeys().index("t")
 
+        tagged_shape = self.Input.meta.getTaggedShape()
+
         def relabel_single_slice(t, res_t):
-            if slot == self.RelabelDict and t in self._relable_dict:
-                result[res_t] = self._relable_dict[t]
-                return
 
             t_slice_roi = roi.copy()
             t_slice_roi.start[t_idx] = t
             t_slice_roi.stop[t_idx] = t + 1
 
-            t_slice = vigra.taggedView(self.Input.get(t_slice_roi).wait(), self.Input.meta.axistags).withAxes("zyx")
-            _res, _max_label, labelmap_dict = vigra.analysis.relabelConsecutive(
-                t_slice, self.StartLabel.value, keep_zeros=True, out=t_slice
-            )
+            t_slc = roiToSlice(t_slice_roi.start, t_slice_roi.stop)
 
-            self._relable_dict[t] = labelmap_dict
+            label_image, label_dict = self._cached_fun(dict(zip(tagged_shape.keys(), t_slc)), self.Input)
+
             result_roi = roi.copy()
             result_roi.start[t_idx] = res_t
             result_roi.stop[t_idx] = res_t + 1
-            result[result_roi.toSlice()] = t_slice.withAxes(self.Output.meta.axistags)
+            if slot == self.RelabelDict:
+                breakpoint()
+                result[result_roi.toSlice()] = label_dict
+            elif slot == self.Output:
+                result[result_roi.toSlice()] = label_image.withAxes(self.Output.meta.axistags)
 
         pool = RequestPool()
         for res_t_ind, t in enumerate(range(roi.start[t_idx], roi.stop[t_idx])):
@@ -169,54 +224,6 @@ class OpRelabelConsecutive5DNoCache(Operator):
         pool.wait()
 
     def propagateDirty(self, slot, subindex, roi):
-        self._relable_dict = {}
+
         self.Output.setDirty(())
         self.RelabelDict.setDirty(())
-
-
-class OpRelabelConsecutive5DCached(OpCachedCompute2outs):
-    OutputDict = OutputSlot()
-
-    def __init__(self, *args, **kwargs):
-        super().__init__(args, kwargs)
-
-    def _execute_Output(self, slot, subindex, roi, result):
-        self._execute_Output_impl2(slot, (roi.start, roi.stop), result)
-
-    def _execute_Output_impl2(self, slot, request_roi, result):
-        raise NotImplementedError()
-
-    def _resetBlocks(self, *_):
-        with self._lock:
-            self._block_data = {"Output": {}, "OutputDict": {}}
-            self._block_locks = {}
-            self._last_access_times = collections.defaultdict(float)
-
-    def usedMemory(self):
-        # TODO
-        total = 0.0
-        for k in list(self._block_data.keys()):
-            try:
-                block = self._block_data["Output"][k]
-                bytes_per_pixel = numpy.dtype(block.dtype).itemsize
-                portion = block.size * bytes_per_pixel
-            except (KeyError, AttributeError):
-                # what could have happened and why it's fine
-                #  * block was deleted (then it does not occupy memory)
-                #  * block is not array data (then we don't know how
-                #    much memory it ouccupies)
-                portion = 0.0
-            total += portion
-        return total
-
-    def freeBlock(self, key):
-        with self._lock:
-            if key not in self._block_locks:
-                return 0
-            block = self._block_data[key]
-            bytes_per_pixel = numpy.dtype(block.dtype).itemsize
-            mem = block.size * bytes_per_pixel
-            del self._block_data[key]
-            del self._block_locks[key]
-            del self._last_access_times[key]
-            return mem
