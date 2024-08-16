@@ -21,6 +21,7 @@
 ###############################################################################
 from lazyflow.graph import Operator, InputSlot, OutputSlot
 from lazyflow.operators import OpBlockedArrayCache, OpMetadataInjector, OpSubRegion
+from lazyflow.operators.opCompressedCache import OpCompressedCache
 from .opNpyFileReader import OpNpyFileReader
 from lazyflow.operators.ioOperators import (
     OpBlockwiseFilesetReader,
@@ -599,9 +600,10 @@ class OpInputDataReader(Operator):
         page_shape = opReader.Output.meta.ideal_blockshape
 
         # Cache the pages we read
-        opCache = OpBlockedArrayCache(parent=self)
-        opCache.fixAtCurrent.setValue(False)
-        opCache.BlockShape.setValue(page_shape)
+        opCache = OpCompressedCache(parent=self)
+        opCache.name = "OpInputDataReader.OpBlockedArrayCache(tiff)"
+        # opCache.fixAtCurrent.setValue(False)
+        # opCache.BlockShape.setValue(page_shape)
         opCache.Input.connect(opReader.Output)
 
         return ([opReader, opCache], opCache.Output)

@@ -65,6 +65,8 @@ class OpUnblockedArrayCache(Operator, ManagedBlockedCache):
         self._lock = RequestLock()
         self._resetBlocks()
 
+        self._compression_factor = 1.0
+
         self.Input.notifyUnready(self._resetBlocks)
 
         # Now that we're initialized, it's safe to register with the memory manager
@@ -222,20 +224,37 @@ class OpUnblockedArrayCache(Operator, ManagedBlockedCache):
     ## OpManagedCache interface implementation
     ##
     def usedMemory(self):
-        total = 0.0
+        uncompressed_size = 0
+        compressed_size = 0
+        compression_enabled = self.CompressionEnabled.value
         for k in list(self._block_data.keys()):
             try:
                 block = self._block_data[k]
                 bytes_per_pixel = numpy.dtype(block.dtype).itemsize
-                portion = block.size * bytes_per_pixel
+                uncompressed_size += block.size * bytes_per_pixel
+
+                if compression_enabled:
+                    compressed_size += block.data_bytes
+
             except (KeyError, AttributeError):
                 # what could have happened and why it's fine
                 #  * block was deleted (then it does not occupy memory)
                 #  * block is not array data (then we don't know how
                 #    much memory it ouccupies)
-                portion = 0.0
-            total += portion
-        return total
+                pass
+
+        if compression_enabled:
+            try:
+                self._compression_factor = uncompressed_size / compressed_size
+            except ZeroDivisionError:
+                if uncompressed_size == 0:
+                    self._compression_factor = 1.0
+                else:
+                    self._compression_factor = float("inf")
+
+            return compressed_size
+        else:
+            return uncompressed_size
 
     def fractionOfUsedMemoryDirty(self):
         # dirty memory is discarded immediately
@@ -276,3 +295,15 @@ class OpUnblockedArrayCache(Operator, ManagedBlockedCache):
             self._block_data = {}
             self._block_locks = {}
             self._last_access_times = collections.defaultdict(float)
+
+    def generateReport(self, memInfoNode):
+        super().generateReport(memInfoNode)
+        try:
+            memInfoNode.dtype = str(self.Output.meta.dtype)
+        except Exception as e:
+            memInfoNode.dtype = e.message
+
+        if self.CompressionEnabled.value:
+            memInfoNode.info = f"Compression factor: {self._compression_factor:.2f}"
+        else:
+            memInfoNode.info = "No compression used."

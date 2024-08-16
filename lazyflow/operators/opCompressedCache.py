@@ -32,6 +32,10 @@ import collections
 import itertools
 import time
 
+from vigra import Compression
+
+import hdf5plugin
+
 # Third-party
 import numpy
 import h5py
@@ -93,6 +97,8 @@ class OpUnmanagedCompressedCache(Operator):
     # Provides data as hdf5 datasets.  Only allowed for rois that exactly match a block.
     OutputHdf5 = OutputSlot(allow_mask=True)
 
+    _compression_method = hdf5plugin.Blosc(cname="lz4", clevel=2, shuffle=0)  # {"compression": "lzf"}  #
+
     def __init__(self, *args, **kwargs):
         super(OpUnmanagedCompressedCache, self).__init__(*args, **kwargs)
         self._lock = RequestLock()
@@ -108,6 +114,7 @@ class OpUnmanagedCompressedCache(Operator):
             self._blockLocks = {}
             self._chunkshape = self._chooseChunkshape(self._blockshape)
             self._last_access_times = collections.defaultdict(float)
+            self._compression_factor = 1.0
 
     def cleanUp(self):
         logger.debug("Cleaning up")
@@ -319,7 +326,7 @@ class OpUnmanagedCompressedCache(Operator):
 
         dtypeBytes = self._getDtypeBytes(self.Output.meta.dtype)
 
-        desiredSpace = 1024 ** 2 / float(dtypeBytes)
+        desiredSpace = 1024**2 / float(dtypeBytes)
 
         if bigintprod(blockshape) <= desiredSpace:
             return blockshape
@@ -408,7 +415,7 @@ class OpUnmanagedCompressedCache(Operator):
 
                 # Make a compressed dataset
                 mem_file.create_dataset(
-                    "data", shape=datashape, dtype=self.Output.meta.dtype, chunks=chunkshape, compression="lzf"
+                    "data", shape=datashape, dtype=self.Output.meta.dtype, chunks=chunkshape, **self._compression_method
                 )  # lzf should be faster than gzip,
                 # with a slightly worse compression ratio
                 # Add mask information if needed.

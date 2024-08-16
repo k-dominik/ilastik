@@ -21,6 +21,8 @@
 ###############################################################################
 import sys
 
+from lazyflow.operators.opCompressedCache import OpCompressedCache
+
 if sys.version_info.major >= 3:
     unicode = str
 
@@ -234,10 +236,11 @@ class OpLabelingABC(with_metaclass(ABCMeta, Operator)):
 
     def __init__(self, *args, **kwargs):
         super(OpLabelingABC, self).__init__(*args, **kwargs)
-        self._cache = OpBlockedArrayCache(parent=self)
+        self._cache = OpCompressedCache(parent=self)  # OpBlockedArrayCache(parent=self)  #
         self._cache.name = "OpLabelVolume.OutputCache"
-        self._cache.BypassModeEnabled.connect(self.BypassModeEnabled)
+        # self._cache.BypassModeEnabled.connect(self.BypassModeEnabled)
         self._cache.Input.connect(self.Output)
+        # self._cache.CompressionEnabled.setValue(True)
         self.CachedOutput.connect(self._cache.Output)
         self.CleanBlocks.connect(self._cache.CleanBlocks)
 
