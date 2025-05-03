@@ -1,7 +1,7 @@
 channels:
   - ilastik-forge/label/patched
-  - ilastik-forge
   - conda-forge
+  - ilastik-forge
 dependencies:
   - python 3.11.*
   - numpy 1.*
