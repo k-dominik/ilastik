@@ -20,12 +20,12 @@ outputs:
         - python -m pip install . --no-deps --ignore-installed --no-cache-dir -vvv
     requirements:
       host:
-        - python >=3.7
+        - python >=3.9
         - pip
         - setuptools >=40.0
         - setuptools_scm
       run:
-        - python >=3.7
+        - python >=3.9
         - numpy >1.12,<1.23
         # aiohttp to enable zarr.storage.FSStore
         - aiohttp
@@ -118,7 +118,7 @@ outputs:
       run:
         - python 3.9.*
         - {{ pin_subpackage("ilastik-core", exact=True) }}
-        - pytorch >=1.6,<2.4.1
+        - pytorch >=1.6
         - tiktorch
         - torchvision
         - volumina
@@ -135,8 +135,6 @@ outputs:
       requires:
         - pytest >4
         - pytest-qt
-        # need to help mamba here a bit
-        - ilastik-pytorch-version-helper-cpu
         - pytorch 2.*
 
       imports:
@@ -170,7 +168,7 @@ outputs:
       run:
         - python 3.9.*
         - {{ pin_subpackage("ilastik-core", exact=True) }}
-        - pytorch >=1.6,<2.4.1
+        - pytorch >=1.6
         - tiktorch
         - torchvision
         - pytorch-cuda
