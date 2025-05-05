@@ -68,7 +68,6 @@ outputs:
         - z5py
         - zarr 2.*
       run_constrained:
-        - mkl <2024.1.0
         - tiktorch 25.4.0
         - volumina >=1.3.10
         # TODO: sphericaltexture 0.1.1 currently times out in the tests
