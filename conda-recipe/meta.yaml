@@ -63,7 +63,7 @@ outputs:
         - tifffile >=2022
         # build 1.11.1=*_1028 on cf is the first to be compatible with numpy>1.19
         # need to bump this manually until there is a true version bump in vigra
-        - vigra 1.11.1=*_1038
+        - vigra 1.12.1
         - xarray !=2023.8.0,!=2023.9.0,!=2023.10.0
         - z5py
         - zarr 2.*
@@ -170,7 +170,7 @@ outputs:
         - pytorch >=1.6
         - tiktorch
         - torchvision
-        - pytorch-cuda
+        - pytorch *cuda*
         - volumina
         # Third-party object feature plugins
         - sphericaltexture_plugin
@@ -186,7 +186,6 @@ outputs:
         - pytest >4
         - pytest-qt
         - pytorch 2.*
-        - pytorch-cuda 11.*
 
       imports:
         - ilastik
