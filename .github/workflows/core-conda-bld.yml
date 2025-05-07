@@ -59,9 +59,12 @@ jobs:
         include:
           - ilastik_variant: "ilastik-core"
             build_prefix: "py_"
+          - ilastik_variant: "ilastik-gpu"
+            cuda_version: "12.6"
     runs-on: ${{ matrix.os }}
     env:
       ILASTIK_PACKAGE_NAME: ${{ matrix.ilastik_variant }}-${{ needs.conda-noarch-build.outputs.version }}-${{ matrix.build_prefix }}0.conda
+      CONDA_OVERRIDE_CUDA: ${{ matrix.cuda_version }}
     steps:
       # necessary on windows: https://github.com/actions/cache/issues/591#issuecomment-845132253
       - name: "Use GNU tar instead BSD tar"
