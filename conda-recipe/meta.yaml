@@ -115,7 +115,7 @@ outputs:
         - ilastik = ilastik_scripts.ilastik_startup:main
     requirements:
       run:
-        - python 3.9.*
+        - python 3.11.*
         - {{ pin_subpackage("ilastik-core", exact=True) }}
         - pytorch >=1.6
         - tiktorch
@@ -165,12 +165,11 @@ outputs:
         - ilastik = ilastik_scripts.ilastik_startup:main
     requirements:
       run:
-        - python 3.9.*
+        - python 3.11.*
         - {{ pin_subpackage("ilastik-core", exact=True) }}
         - pytorch >=1.6
         - tiktorch
         - torchvision
-        - pytorch *cuda*
         - volumina
         # Third-party object feature plugins
         - sphericaltexture_plugin
