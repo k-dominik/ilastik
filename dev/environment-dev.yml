@@ -50,7 +50,7 @@ dependencies:
 
   # Deep learning dependencies (neural net workflow, trainable domain adaptation)
   # can be changed to request gpu versions
-  - pytorch 2.6.*  # >=2.4 can clash with pyshtools on win; 2.2.2 newest available on osx
+  - pytorch 2.7.*  # >=2.4 can clash with pyshtools on win; 2.2.2 newest available on osx
   # - cpuonly  # comment out for pytorch with cuda
   # - pytorch-cuda=11.3  # uncomment for pytorch with cuda, specify cuda version
   - tiktorch 25.4.0
