@@ -91,6 +91,7 @@ outputs:
         - pytest.ini
 
       requires:
+        - python 3.11
         - pytest >4
         - pytest-qt
         - volumina
