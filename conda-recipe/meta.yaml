@@ -122,7 +122,7 @@ outputs:
         - torchvision
         - volumina
         # Third-party object feature plugins
-        # - sphericaltexture_plugin
+        - sphericaltexture_plugin
 
     test:
       source_files:
@@ -172,7 +172,7 @@ outputs:
         - torchvision
         - volumina
         # Third-party object feature plugins
-        # - sphericaltexture_plugin
+        - sphericaltexture_plugin
 
     test:
       source_files:
