@@ -27,7 +27,8 @@ import math
 import logging
 import glob
 import h5py
-import z5py
+
+# import z5py
 from collections import OrderedDict
 
 logger = logging.getLogger(__name__)
@@ -622,11 +623,11 @@ class OpH5N5WriterBigDataset(Operator):
             kwargs["compression"] = "gzip"  # <-- Would be nice to use lzf compression here, but that is h5py-specific.
             if isinstance(self.f, h5py.File):
                 kwargs["compression_opts"] = 1  # <-- Optimize for speed, not disk space.
-            else:  # z5py has uses different names here
-                kwargs["level"] = 1  # <-- Optimize for speed, not disk space.
-        else:
-            if isinstance(self.f, z5py.N5File):  # n5 uses gzip level 5 as default compression.
-                kwargs["compression"] = "raw"
+            # else:  # z5py has uses different names here
+            #     kwargs["level"] = 1  # <-- Optimize for speed, not disk space.
+        # else:
+        #     if isinstance(self.f, z5py.N5File):  # n5 uses gzip level 5 as default compression.
+        #         kwargs["compression"] = "raw"
 
         self.d = g.create_dataset(datasetName, **kwargs)
 

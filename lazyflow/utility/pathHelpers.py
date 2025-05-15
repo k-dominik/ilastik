@@ -29,7 +29,8 @@ import pathlib
 from typing import List
 
 import h5py
-import z5py
+
+# import z5py
 import numpy
 
 
@@ -367,11 +368,13 @@ def lsH5N5(h5N5FileObject, minShape=2, maxShape=5):
     listOfDatasets = []
 
     def addObjectNames(objectName, obj):
-        if not isinstance(obj, (h5py._hl.dataset.Dataset, z5py.dataset.Dataset)):
+        if not isinstance(obj, (h5py._hl.dataset.Dataset,)):
             return
         if len(obj.shape) not in range(minShape, maxShape + 1):
             return
-        if isinstance(h5N5FileObject, z5py.N5File):
+        if isinstance(
+            h5N5FileObject,
+        ):
             # make sure we get a path with forward slashes on windows
             objectName = pathlib.Path(objectName).as_posix()
         listOfDatasets.append({"name": objectName, "object": obj})
@@ -401,7 +404,7 @@ def globH5N5(fileObject, globString):
           matches occurred.
         - None if fileObject is not a h5 or n5 file object
     """
-    if isinstance(fileObject, (h5py.File, z5py.N5File)):
+    if isinstance(fileObject, (h5py.File,)):
         pathlist = [x["name"] for x in lsH5N5(fileObject)]
     else:
         return None

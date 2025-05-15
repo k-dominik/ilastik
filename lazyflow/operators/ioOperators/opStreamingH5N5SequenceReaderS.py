@@ -27,7 +27,8 @@ from lazyflow.operators.ioOperators.opStreamingH5N5Reader import OpStreamingH5N5
 from lazyflow.utility.pathHelpers import PathComponents, globH5N5
 
 import h5py
-import z5py
+
+# import z5py
 import logging
 
 logger = logging.getLogger(__name__)
@@ -115,7 +116,7 @@ class OpStreamingH5N5SequenceReaderS(Operator):
         for opReader in self._readers:
             opReader.cleanUp()
         if self._h5N5File is not None:
-            assert isinstance(self._h5N5File, (h5py.File, z5py.N5File)), "_h5N5File should not be of any other type"
+            assert isinstance(self._h5N5File, (h5py.File,)), "_h5N5File should not be of any other type"
             self._h5N5File.close()
 
         super().cleanUp()
@@ -210,7 +211,7 @@ class OpStreamingH5N5SequenceReaderS(Operator):
             List of internal paths matching the globstrings that were found in
             the provided h5py.File object
         """
-        if not isinstance(h5N5File, (h5py.File, z5py.N5File)):
+        if not isinstance(h5N5File, (h5py.File,)):
             with OpStreamingH5N5Reader.get_h5_n5_file(h5N5File, mode="r") as f:
                 ret = OpStreamingH5N5SequenceReaderS.expandGlobStrings(f, globStrings)
             return ret

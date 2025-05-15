@@ -19,7 +19,7 @@
 # This information is also available on the ilastik web site at:
 # 		   http://ilastik.org/license/
 ###############################################################################
-import z5py
+# import z5py
 import json
 import numpy as np
 
@@ -52,4 +52,4 @@ class N5JsonEncoder(json.JSONEncoder):
         return super().default(obj)
 
 
-z5py.set_json_encoder(N5JsonEncoder)  # Set a json decoder for z5py
+# z5py.set_json_encoder(N5JsonEncoder)  # Set a json decoder for z5py

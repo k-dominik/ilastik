@@ -33,7 +33,8 @@ import numpy
 import vigra
 from vigra import AxisTags
 import h5py
-import z5py
+
+# import z5py
 from ndstructs import Shape5D
 
 from lazyflow.graph import InputSlot, OutputSlot, OperatorWrapper
@@ -295,13 +296,13 @@ class DatasetInfo(ABC):
                     continue
                 elif cls.pathIsHdf5(path):
                     f = h5py.File(path, "r")
-                elif cls.pathIsN5(path):
-                    try:
-                        f = z5py.N5File(path)
-                    except AttributeError as e:
-                        # z5py.file doesn't check metadata cleanly:
-                        # `metadata.get('n5') # AttributeError: 'NoneType' object has no attribute 'get'
-                        raise ValueError(f'N5 metadata at "{path}" has incompatible format') from e
+                # elif cls.pathIsN5(path):
+                #     try:
+                #         f = z5py.N5File(path)
+                #     except AttributeError as e:
+                #         # z5py.file doesn't check metadata cleanly:
+                #         # `metadata.get('n5') # AttributeError: 'NoneType' object has no attribute 'get'
+                #         raise ValueError(f'N5 metadata at "{path}" has incompatible format') from e
                 else:
                     raise ValueError(f"{path} is not an 'n5' or 'h5' file")
                 internal_paths |= set(globH5N5(f, glob_str))
@@ -331,15 +332,15 @@ class DatasetInfo(ABC):
         datasetNames = []
 
         def accumulateInternalPaths(name, val):
-            if isinstance(val, (h5py.Dataset, z5py.dataset.Dataset)) and min_ndim <= len(val.shape) <= max_ndim:
+            if isinstance(val, (h5py.Dataset,)) and min_ndim <= len(val.shape) <= max_ndim:
                 datasetNames.append("/" + name)
 
         if cls.pathIsHdf5(file_path):
             with h5py.File(file_path, "r") as f:
                 f.visititems(accumulateInternalPaths)
-        elif cls.pathIsN5(file_path):
-            with z5py.N5File(file_path, mode="r+") as f:
-                f.visititems(accumulateInternalPaths)
+        # elif cls.pathIsN5(file_path):
+        #     with z5py.N5File(file_path, mode="r+") as f:
+        #         f.visititems(accumulateInternalPaths)
 
         return datasetNames
 

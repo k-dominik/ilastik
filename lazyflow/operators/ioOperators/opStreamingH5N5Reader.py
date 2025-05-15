@@ -28,7 +28,8 @@ from typing import Union
 
 import vigra
 import h5py
-import z5py
+
+# import z5py
 import os
 
 from lazyflow.graph import Operator, InputSlot, OutputSlot
@@ -38,7 +39,7 @@ from lazyflow.utility.helpers import get_default_axisordering, bigintprod
 logger = logging.getLogger(__name__)
 
 
-def _find_or_infer_axistags(file: Union[h5py.File, z5py.N5File], internalPath: str) -> vigra.AxisTags:
+def _find_or_infer_axistags(file: h5py.File, internalPath: str) -> vigra.AxisTags:
     assert internalPath in file, "Existence of dataset must be checked earlier"
     with contextlib.suppress(KeyError):
         # Look for ilastik-style axistags property.
@@ -163,7 +164,7 @@ class OpStreamingH5N5Reader(Operator):
         default mode = 'a':  Read/write if exists, create otherwise
         """
         name, ext = os.path.splitext(filepath)
-        if ext in OpStreamingH5N5Reader.N5EXTS:
-            return z5py.N5File(filepath, mode)
-        elif ext in OpStreamingH5N5Reader.H5EXTS:
+        # if ext in OpStreamingH5N5Reader.N5EXTS:
+        #     return z5py.N5File(filepath, mode)
+        if ext in OpStreamingH5N5Reader.H5EXTS:
             return h5py.File(filepath, mode)

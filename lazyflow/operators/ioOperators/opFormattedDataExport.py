@@ -30,7 +30,7 @@ import numpy
 from typing import Tuple
 from pathlib import Path
 
-import z5py
+# import z5py
 from ndstructs import Slice5D
 
 from lazyflow.utility import format_known_keys
