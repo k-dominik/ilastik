@@ -86,6 +86,17 @@
       </widget>
      </item>
      <item>
+     <item>
+      <widget class="QPushButton" name="LabelListButton">
+       <property name="styleSheet">
+        <string notr="true"/>
+       </property>
+       <property name="text">
+        <string>Label List</string>
+       </property>
+      </widget>
+     </item>
+     <item>
       <layout class="QHBoxLayout" name="horizontalLayout" stretch="0,0,0,1,0">
        <property name="sizeConstraint">
         <enum>QLayout::SetDefaultConstraint</enum>

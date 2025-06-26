@@ -284,6 +284,9 @@ class LabelingGui(LayerViewerGui):
             _labelControlUi.AddLabelButton.clicked.connect(bind(self._addNewLabel))
         _labelControlUi.labelListModel.dataChanged.connect(self.onLabelListDataChanged)
 
+        if hasattr(_labelControlUi, "LabelListButton"):
+            _labelControlUi.LabelListButton.clicked.connect(bind(self._open_ex))
+
         # Initialize the arrow tool button with an icon and handler
         iconPath = os.path.split(__file__)[0] + "/icons/arrow.png"
         arrowIcon = QIcon(iconPath)
@@ -346,11 +349,28 @@ class LabelingGui(LayerViewerGui):
         self.paintBrushSizeIndex = preferences.get("labeling", "paint brush size", default=0)
         self.eraserSizeIndex = preferences.get("labeling", "eraser brush size", default=4)
 
+    def _open_ex(self):
+        from .labelExplorerGui import LabelExplorer
+
+        slot = self.topLevelOperatorView.NonzeroLabelBlocks
+        slot_out = self.topLevelOperatorView.LabelImages
+
+        self.label_list_wdgt = LabelExplorer(slot, slot_out)
+
+        def _goto(position_dict):
+            # xyz
+            pos = [position_dict[k] if k in position_dict else 0 for k in "xyz"]
+            self.volumeEditorWidget.editor.posModel.slicingPos = pos
+            self.volumeEditorWidget.editor.posModel.cursorPos = pos
+            self.volumeEditorWidget.editor.navCtrl.panSlicingViews(pos, [0, 1, 2])
+
+        self.label_list_wdgt.positionRequested.connect(_goto)
+        self.label_list_wdgt.show()
+
     def onLabelListDataChanged(self, topLeft, bottomRight):
         """Handle changes to the label list selections."""
         firstRow = topLeft.row()
         lastRow = bottomRight.row()
-
         firstCol = topLeft.column()
         lastCol = bottomRight.column()
 

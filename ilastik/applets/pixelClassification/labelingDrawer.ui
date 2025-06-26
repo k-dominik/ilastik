@@ -212,6 +212,16 @@
       </widget>
      </item>
      <item>
+      <widget class="QPushButton" name="LabelListButton">
+       <property name="styleSheet">
+        <string notr="true"/>
+       </property>
+       <property name="text">
+        <string>Label List</string>
+       </property>
+      </widget>
+     </item>
+     <item>
       <widget class="QToolButton" name="liveUpdateButton">
        <property name="sizePolicy">
         <sizepolicy hsizetype="Fixed" vsizetype="Fixed">
