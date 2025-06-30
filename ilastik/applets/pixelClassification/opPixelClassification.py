@@ -439,6 +439,7 @@ class OpLabelPipeline(Operator):
 
         # Aim for blocks that are roughly 20px
         block_shape = determineBlockShape(list(tagged_shape.values()), 40**3)
+        print(block_shape)
         self.opLabelArray.blockShape.setValue(block_shape)
 
     def setInSlot(self, slot, subindex, roi, value):

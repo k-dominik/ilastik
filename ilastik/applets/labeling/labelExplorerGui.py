@@ -25,6 +25,7 @@ from vigra.analysis import extractRegionFeatures
 
 from lazyflow.slot import OutputSlot
 from lazyflow.utility.io_util.write_ome_zarr import SPATIAL_AXES
+from ilastik.utility.gui import silent_qobject
 
 
 class LabelExplorer(QDialog):
@@ -37,10 +38,15 @@ class LabelExplorer(QDialog):
         self.label_slot = label_slot
         self.axistags = label_slot.meta.getAxisKeys()
         self.populateTable()
+
+        def _printy(slot, roi, **kwargs):
+            print(f"{slot=} -- {roi.start=} {roi.stop}")
+
         label_slot.notifyDirty(self.populateTable)
+        label_slot.notifyDirty(_printy)
 
         def _sync_viewer_position(currentRow, _currentColumn, _previousRow, _previousColumn):
-            position = self.tableWidget.item(currentRow, 1).data(Qt.UserRole)
+            position = self.tableWidget.item(currentRow, 0).data(Qt.UserRole)
             self.positionRequested.emit(position)
 
         self.tableWidget.currentCellChanged.connect(_sync_viewer_position)
@@ -48,8 +54,8 @@ class LabelExplorer(QDialog):
     def setupUi(self):
         layout = QVBoxLayout()
         self.tableWidget = QTableWidget()
-        self.tableWidget.setColumnCount(3)
-        self.tableWidget.setHorizontalHeaderLabels(["id", "position", "comment"])
+        self.tableWidget.setColumnCount(1)
+        self.tableWidget.setHorizontalHeaderLabels(["position"])
         self.tableWidget.setSelectionBehavior(QAbstractItemView.SelectRows)
         layout.addWidget(self.tableWidget)
         self.setLayout(layout)
@@ -61,16 +67,14 @@ class LabelExplorer(QDialog):
         for roi in non_zero_slicings:
             annotation_centers.extend(self.extract_annotations(roi))
 
-        self.tableWidget.setRowCount(len(annotation_centers))
-        for row, roi in enumerate(annotation_centers):
-            id_item = QTableWidgetItem(str(row))
-            roi_center = roi
-            position_item = QTableWidgetItem(str(roi_center))
-            position_item.setData(Qt.UserRole, roi_center)
-            comment_item = QTableWidgetItem("")
-            self.tableWidget.setItem(row, 0, id_item)
-            self.tableWidget.setItem(row, 1, position_item)
-            self.tableWidget.setItem(row, 2, comment_item)
+        with silent_qobject(self.tableWidget):
+
+            self.tableWidget.setRowCount(len(annotation_centers))
+            for row, roi in enumerate(annotation_centers):
+                roi_center = roi
+                position_item = QTableWidgetItem(str(roi_center))
+                position_item.setData(Qt.UserRole, roi_center)
+                self.tableWidget.setItem(row, 0, position_item)
 
     def extract_annotations(self, roi):
         tagged_roi = dict(zip(self.axistags, roi))

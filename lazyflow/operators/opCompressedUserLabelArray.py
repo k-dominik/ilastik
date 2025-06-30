@@ -413,9 +413,12 @@ class OpCompressedUserLabelArray(OpUnmanagedCompressedCache):
             new_pixels = new_pixels.view(numpy.ndarray)
 
         # Get logical blocking.
+        print("bks", getIntersectingBlocks(self._blockshape, (roi.start, roi.stop)))
         block_rois = getIntersectingRois(self.Output.meta.shape, self._blockshape, (roi.start, roi.stop))
         # Convert to tuples
         block_rois = [(tuple(start), tuple(stop)) for start, stop in block_rois]
+        print(self._blockshape)
+        print(f"{block_rois=}")
 
         max_label = 0
         for block_roi in block_rois:
