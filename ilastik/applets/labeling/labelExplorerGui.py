@@ -82,7 +82,6 @@ class Region:
 class Block:
     axistags: str
     slices: tuple[slice, ...]
-    n_dim: Literal[2, 3]
     regions: List[Region]
     neigbourhood: Neighbourhood = Neighbourhood.NDIM
 

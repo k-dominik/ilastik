@@ -32,7 +32,7 @@ def test_no_region_at_boundary_2d(boundary: BoundaryDescrRelative):
     r2 = Region(axistags=axistags, slices=(slice(1, 2), slice(1, 2)), label=1)
     r3 = Region(axistags=axistags, slices=(slice(5, 9), slice(1, 2)), label=2)
 
-    b = Block(axistags=axistags, slices=(slice(10, 20), slice(20, 30)), n_dim=2, regions=(r1, r2, r3))
+    b = Block(axistags=axistags, slices=(slice(10, 20), slice(20, 30)), regions=(r1, r2, r3))
 
     assert len(list(b.boundary_regions(boundary))) == 0
 
@@ -69,7 +69,6 @@ def test_boundary_regions_2d(boundary: BoundaryDescrRelative, expected_regions):
     b = Block(
         axistags=axistags,
         slices=(slice(10, 20), slice(20, 30)),
-        n_dim=2,
         regions=(r_left, r_right, r_top, r_bottom, r_topleft, r_topright, r_bottomleft, r_bottomright),
     )
 
@@ -108,7 +107,6 @@ def test_boundary_regions_per_label_2d(boundary, label, expected_regions):
     b = Block(
         axistags=axistags,
         slices=(slice(10, 20), slice(20, 30)),
-        n_dim=2,
         regions=(r_left, r_right, r_top, r_bottom, r_topleft, r_topright, r_bottomleft, r_bottomright),
     )
 
