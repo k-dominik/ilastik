@@ -1,6 +1,15 @@
+import numpy
 import pytest
+import vigra
 
-from ilastik.applets.labeling.labelExplorerGui import Block, BlockBoundary, BoundaryDescr, BoundaryDescrRelative, Region
+from ilastik.applets.labeling.labelExplorerGui import (
+    Block,
+    BlockBoundary,
+    BoundaryDescr,
+    BoundaryDescrRelative,
+    Region,
+    extract_annotations,
+)
 
 
 @pytest.mark.parametrize(
@@ -104,3 +113,25 @@ def test_boundary_regions_per_label_2d(boundary, label, expected_regions):
     )
 
     assert len(list(b.boundary_regions(boundary, label=label))) == expected_regions
+
+
+def test_extract_annotations():
+    axistags = "xy"
+
+    data = numpy.zeros((100, 100), dtype="uint32")
+    data[0:1, :] = 1
+    data[3:5, 3:7] = 2
+    data[8:9, 8:10] = 1
+
+    labels_data = vigra.taggedView(data, axistags=axistags)
+
+    regions = extract_annotations(axistags=axistags, labels_data=labels_data)
+
+    assert len(regions) == 3
+    assert len([r for r in regions if r.label == 1]) == 2
+    assert len([r for r in regions if r.label == 2]) == 1
+
+    r_2 = next((r for r in regions if r.label == 2))
+    assert r_2.axistags == axistags
+    assert r_2.tagged_slicing["x"] == slice(3, 5)
+    assert r_2.tagged_slicing["y"] == slice(3, 7)

@@ -51,7 +51,7 @@ BoundaryDescr = dict[Literal["x", "y", "z"], Union[int, None]]
 @dataclass
 class Region:
     axistags: str
-    slices: tuple[slice]
+    slices: tuple[slice, ...]
     label: int
 
     @property
@@ -169,21 +169,35 @@ class LabelExplorer(QDialog):
                 position_item.setData(Qt.UserRole, roi_center)
                 self.tableWidget.setItem(row, 0, position_item)
 
-    def extract_annotations(self, roi):
-        tagged_roi = dict(zip(self.axistags, roi))
-        labels_data = vigra.taggedView(self.label_slot[roi].wait(), "".join(self.axistags))
-        if "z" in self.axistags:
-            connected_components = vigra.analysis.labelVolumeWithBackground(
-                labels_data.astype("uint32"),
-            )
-        else:
-            connected_components = vigra.analysis.labelImageWithBackground(
-                labels_data.astype("uint32"),
-            )
-        feats = extractRegionFeatures(
-            labels_data.astype("float32"), connected_components, ignoreLabel=0, features=["RegionCenter"]
+
+def extract_annotations(axistags: str, labels_data) -> Tuple[Region, ...]:
+    if "z" in axistags:
+        connected_components = vigra.analysis.labelVolumeWithBackground(
+            labels_data.astype("uint32"),
+            neighborhood=26,
         )
-        centers = feats["RegionCenter"].astype("uint32") + [
-            tagged_roi[x].start for x in self.axistags if x in SPATIAL_AXES
-        ]
-        return [dict(zip(self.axistags, center)) for center in centers[1::]]
+    else:
+        connected_components = vigra.analysis.labelImageWithBackground(
+            labels_data.astype("uint32"),
+            neighborhood=8,
+        )
+    feats = extractRegionFeatures(
+        labels_data.astype("float32"),
+        connected_components,
+        ignoreLabel=0,
+        features=["RegionCenter", "Coord<Maximum>", "Coord<Minimum>", "Minimum"],
+    )
+
+    # shape: (n_objs, ndim)
+    max_bb = feats["Coord<Maximum>"].astype("uint32") + 1
+    min_bb = feats["Coord<Minimum>"].astype("uint32")
+
+    slices: list[tuple[slice, ...]] = []
+    for min_, max_ in zip(min_bb, max_bb):
+        slices.append(tuple(slice(mi, ma) for mi, ma in zip(min_, max_)))
+    # we pass the label image as "image", so minimum will be the same label
+    labels = feats["Minimum"].astype("uint32")
+
+    regions = tuple(Region(axistags=axistags, slices=sl, label=label) for sl, label in zip(slices[1::], labels[1::]))
+
+    return regions
