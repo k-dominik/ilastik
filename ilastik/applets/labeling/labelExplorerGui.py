@@ -78,6 +78,11 @@ class Region:
         return is_at_boundary
 
 
+def add_tagged_coords(t1, t2):
+    assert set(t1.keys()).issubset(set(t2.keys())), f"{list(t1.keys())=}, {list(t2.keys())=}"
+    return {k: t1[k] + t2[k] for k in t1.keys()}
+
+
 @dataclass
 class Block:
     axistags: str
@@ -92,6 +97,10 @@ class Block:
     @property
     def spatial_axes(self):
         return [x for x in self.axistags if x in SPATIAL_AXES]
+
+    @property
+    def tagged_start(self):
+        return {tag: sl.start for tag, sl in zip(self.axistags, self.slices)}
 
     def boundary_regions(self, boundary: BoundaryDescrRelative, label: Optional[int] = None):
         if self.neigbourhood == Neighbourhood.NONE:
@@ -153,11 +162,22 @@ class LabelExplorer(QDialog):
         self.setLayout(layout)
 
     def populateTable(self, *args, **kwargs):
-        non_zero_slicings = self.nonzero_blocks_slot.value
+        non_zero_slicings: List[Tuple[slice, ...]] = self.nonzero_blocks_slot.value
+        print("NON_ZERO_BLOCK", non_zero_slicings)
 
         annotation_centers = []
+        regions: list[Region] = []
+        blocks = []
+
         for roi in non_zero_slicings:
-            annotation_centers.extend(self.extract_annotations(roi))
+            labels_data = vigra.taggedView(self.label_slot[roi].wait(), "".join(self.axistags))
+            block_regions = extract_annotations(self.axistags, labels_data)
+            regions.extend(block_regions)
+            block = Block(axistags="".join(self.axistags), slices=roi, regions=block_regions)
+            annotation_centers.extend(
+                [add_tagged_coords(reg.tagged_center, block.tagged_start) for reg in block_regions]
+            )
+            blocks.append(block)
 
         with silent_qobject(self.tableWidget):
 
@@ -170,7 +190,7 @@ class LabelExplorer(QDialog):
 
 
 def extract_annotations(axistags: str, labels_data) -> Tuple[Region, ...]:
-    if "z" in axistags:
+    if "z" in axistags and labels_data.depth > 1:
         connected_components = vigra.analysis.labelVolumeWithBackground(
             labels_data.astype("uint32"),
             neighborhood=26,
