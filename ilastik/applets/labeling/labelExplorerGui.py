@@ -60,7 +60,7 @@ class Region:
 
     @property
     def tagged_center(self):
-        return {k: sl.stop - sl.start for k, sl in self.tagged_slicing.items()}
+        return {k: int((sl.stop - sl.start) / 2) + sl.start for k, sl in self.tagged_slicing.items()}
 
     def is_at_boundary(self, boundary: BoundaryDescr) -> bool:
         if all(b is None for b in boundary.values()):
