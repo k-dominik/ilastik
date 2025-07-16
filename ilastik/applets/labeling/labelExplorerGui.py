@@ -18,14 +18,107 @@
 # on the ilastik web site at:
 #          http://ilastik.org/license.html
 ###############################################################################
+from dataclasses import dataclass
+from enum import IntEnum
+from typing import List, Literal, Optional, Tuple, Union
+
 import vigra
 from PyQt5.QtCore import Qt, pyqtSignal
 from PyQt5.QtWidgets import QAbstractItemView, QDialog, QTableWidget, QTableWidgetItem, QVBoxLayout
 from vigra.analysis import extractRegionFeatures
 
+from ilastik.utility.gui import silent_qobject
 from lazyflow.slot import OutputSlot
 from lazyflow.utility.io_util.write_ome_zarr import SPATIAL_AXES
-from ilastik.utility.gui import silent_qobject
+
+
+class Neighbourhood(IntEnum):
+    NONE = 0
+    SINGLE = 1  # Axis aligned, 2D: 4, 3D: 6
+    NDIM = 2  # Full block, 2D: 8, 3D: 26
+
+
+class BlockBoundary(IntEnum):
+    NONE = 0
+    START = 1
+    STOP = 2
+
+
+BoundaryDescrRelative = dict[Literal["x", "y", "z"], BlockBoundary]
+BoundaryDescr = dict[Literal["x", "y", "z"], Union[int, None]]
+
+
+@dataclass
+class Region:
+    axistags: str
+    slices: tuple[slice]
+    label: int
+
+    @property
+    def tagged_slicing(self):
+        return dict(zip(self.axistags, self.slices))
+
+    @property
+    def tagged_center(self):
+        return {k: sl.stop - sl.start for k, sl in self.tagged_slicing.items()}
+
+    def is_at_boundary(self, boundary: BoundaryDescr) -> bool:
+        if all(b is None for b in boundary.values()):
+            return False
+
+        is_at_boundary = True
+        for k, coord in boundary.items():
+            if coord is not None:
+                sl = self.tagged_slicing[k]
+                if sl.start == coord or sl.stop == coord:
+                    continue
+                else:
+                    return False
+
+        return is_at_boundary
+
+
+@dataclass
+class Block:
+    axistags: str
+    slices: tuple[slice, ...]
+    n_dim: Literal[2, 3]
+    regions: List[Region]
+    neigbourhood: Neighbourhood = Neighbourhood.NDIM
+
+    @property
+    def tagged_slices(self):
+        return {tag: sl for tag, sl in zip(self.axistags, self.slices)}
+
+    @property
+    def spatial_axes(self):
+        return [x for x in self.axistags if x in SPATIAL_AXES]
+
+    def boundary_regions(self, boundary: BoundaryDescrRelative, label: Optional[int] = None):
+        if self.neigbourhood == Neighbourhood.NONE:
+            return
+
+        def boundary_index_from_slice(sl: slice, boundary: BlockBoundary) -> Union[int, None]:
+            if boundary == BlockBoundary.NONE:
+                return None
+            if boundary == BlockBoundary.START:
+                return 0
+            if boundary == BlockBoundary.STOP:
+                return sl.stop - sl.start
+
+        tagged_boundary = {}
+        for at, bd in boundary.items():
+            tagged_boundary[at] = boundary_index_from_slice(self.tagged_slices[at], bd)
+
+        def labelmatch(region_label) -> bool:
+            if label == None:
+                return True
+            else:
+                return region_label == label
+
+        for region in self.regions:
+            if region.is_at_boundary(tagged_boundary) and labelmatch(region.label):
+                yield region
 
 
 class LabelExplorer(QDialog):
