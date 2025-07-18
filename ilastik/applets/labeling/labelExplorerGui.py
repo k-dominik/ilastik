@@ -20,6 +20,8 @@
 ###############################################################################
 from dataclasses import dataclass
 from enum import IntEnum
+from functools import partial
+from itertools import product
 from typing import List, Literal, Optional, Tuple, Union
 
 import vigra
@@ -28,6 +30,7 @@ from PyQt5.QtWidgets import QAbstractItemView, QDialog, QTableWidget, QTableWidg
 from vigra.analysis import extractRegionFeatures
 
 from ilastik.utility.gui import silent_qobject
+from lazyflow.request.request import Request, RequestPool
 from lazyflow.slot import OutputSlot
 from lazyflow.utility.io_util.write_ome_zarr import SPATIAL_AXES
 
@@ -56,6 +59,7 @@ class Region:
 
     @property
     def tagged_slicing(self):
+        # zip here hides that axistags and slices might be out of sync, in fact axistags have a c....
         return dict(zip(self.axistags, self.slices))
 
     @property
@@ -76,6 +80,15 @@ class Region:
                     return False
 
         return is_at_boundary
+
+    @classmethod
+    def with_slices(cls, reg: "Region", slices) -> "Region":
+        assert len(slices) == len(reg.slices)
+        return Region(axistags=reg.axistags, slices=slices, label=reg.label)
+
+    @property
+    def key(self):
+        return tuple((sl.start, sl.stop) for sl in self.slices)
 
 
 def add_tagged_coords(t1, t2):
@@ -128,6 +141,59 @@ class Block:
             if region.is_at_boundary(tagged_boundary) and labelmatch(region.label):
                 yield region
 
+    def boundaries_positive(self):
+        n_spatial = len(self.spatial_axes)
+        boundary_iter = product([BlockBoundary.NONE, BlockBoundary.STOP], repeat=n_spatial)
+
+        for boundary in boundary_iter:
+            if all(x == BlockBoundary.NONE for x in boundary):
+                continue
+
+            yield dict(zip(self.spatial_axes, boundary))
+
+    def boundary_regions_positive(self):
+        for boundary in self.boundaries_positive():
+            for boundary_region in self.boundary_regions(boundary):
+                yield boundary, boundary_region
+
+    def neighbour_start_coordinates(self, boundary: BoundaryDescrRelative):
+        tagged_slices = self.tagged_slices
+
+        neighbour_start = {}
+        for k, sl in tagged_slices.items():
+            if k not in SPATIAL_AXES:
+                neighbour_start[k] = sl.start
+                continue
+
+            assert k in boundary
+            b = boundary[k]
+            if b == BlockBoundary.NONE:
+                neighbour_start[k] = sl.start
+            elif b == BlockBoundary.START:
+                neighbour_start[k] = sl.start - (sl.stop - sl.start)
+            elif b == BlockBoundary.STOP:
+                neighbour_start[k] = sl.stop
+            else:
+                # unreachable
+                raise NotImplemented()
+
+        return tuple(neighbour_start[k] for k in self.axistags)
+
+    def region_to_world(self, region: Region):
+        tagged_region_sl = region.tagged_slicing
+        world_sl = {}
+        for k, sl in tagged_region_sl.items():
+            if k in SPATIAL_AXES:
+                world_sl[k] = slice(sl.start + self.tagged_start[k], sl.stop + self.tagged_start[k])
+            else:
+                world_sl[k] = sl
+        # hack, currently axistags seem to be out of sync and contain c
+        return region.with_slices(region, tuple(world_sl[k] for k in region.axistags if k in world_sl))
+
+    @property
+    def key(self) -> tuple[int, ...]:
+        return tuple(sl.start for sl in self.slices)
+
 
 class LabelExplorer(QDialog):
     positionRequested = pyqtSignal(dict)
@@ -139,6 +205,7 @@ class LabelExplorer(QDialog):
         self.label_slot = label_slot
         self.axistags = label_slot.meta.getAxisKeys()
         self.populateTable()
+        self._labeled_blocks: dict[Tuple[int, ...], Block] = {}
 
         def _printy(slot, roi, **kwargs):
             print(f"{slot=} -- {roi.start=} {roi.stop}")
@@ -163,30 +230,90 @@ class LabelExplorer(QDialog):
 
     def populateTable(self, *args, **kwargs):
         non_zero_slicings: List[Tuple[slice, ...]] = self.nonzero_blocks_slot.value
-        print("NON_ZERO_BLOCK", non_zero_slicings)
 
-        annotation_centers = []
-        regions: list[Region] = []
-        blocks = []
+        regions_dict, regions = connect_regions(non_zero_slicings, self.label_slot, self.axistags)
 
-        for roi in non_zero_slicings:
-            labels_data = vigra.taggedView(self.label_slot[roi].wait(), "".join(self.axistags))
-            block_regions = extract_annotations(self.axistags, labels_data)
-            regions.extend(block_regions)
-            block = Block(axistags="".join(self.axistags), slices=roi, regions=block_regions)
-            annotation_centers.extend(
-                [add_tagged_coords(reg.tagged_center, block.tagged_start) for reg in block_regions]
-            )
-            blocks.append(block)
+        annotation_anchors = []
+        for k, v in regions_dict.items():
+            if k == v:
+                annotation_anchors.append(regions[k].tagged_center)
 
         with silent_qobject(self.tableWidget):
 
-            self.tableWidget.setRowCount(len(annotation_centers))
-            for row, roi in enumerate(annotation_centers):
+            self.tableWidget.setRowCount(len(annotation_anchors))
+            for row, roi in enumerate(annotation_anchors):
                 roi_center = roi
                 position_item = QTableWidgetItem(str(roi_center))
                 position_item.setData(Qt.UserRole, roi_center)
                 self.tableWidget.setItem(row, 0, position_item)
+
+
+def connect_regions(non_zero_slicings, label_slot, axistags):
+    regions: dict[tuple[tuple[int, int], ...], Region] = {}
+    blocks: dict[tuple[int, ...], Block] = {}
+
+    regions_dict: dict[tuple[tuple[int, int], ...], tuple[tuple[int, int], ...]] = {}
+
+    def extract_single(roi):
+        labels_data = vigra.taggedView(label_slot[roi].wait(), "".join(axistags))
+        block_regions = extract_annotations(axistags, labels_data)
+        block = Block(axistags="".join(axistags), slices=roi, regions=block_regions)
+        blocks[block.key] = block
+
+    pool = RequestPool()
+    for roi in non_zero_slicings:
+        pool.add(Request(partial(extract_single, roi)))
+
+    pool.wait()
+    pool.clean()
+
+    def invert_boundary(boundary: dict[str, BlockBoundary]) -> dict[str, BlockBoundary]:
+        # TODO: do this with a dict
+        b = {}
+        for k, d in boundary.items():
+            if d == BlockBoundary.NONE:
+                b[k] = BlockBoundary.NONE
+            elif d == BlockBoundary.START:
+                b[k] = BlockBoundary.STOP
+            elif d == BlockBoundary.STOP:
+                b[k] = BlockBoundary.START
+
+        return b
+
+    def get_anchor(region):
+        if region.key not in regions_dict:
+            return region.key
+
+        current = region.key
+        while True:
+            anchor = regions_dict[current]
+            if anchor == current:
+                return anchor
+            current = anchor
+
+    for block in blocks.values():
+        for region in block.regions:
+            region_world = block.region_to_world(region)
+            regions[region_world.key] = region_world
+            if region_world.key not in regions_dict:
+                regions_dict[region_world.key] = region_world.key
+        for boundary, region in block.boundary_regions_positive():
+            region_world = block.region_to_world(region)
+            block_start = block.neighbour_start_coordinates(boundary)
+            if block_start not in blocks:
+                continue
+
+            neighbour_block = blocks[block_start]
+            boundary_in_neighbour = invert_boundary(boundary)
+            for reg in neighbour_block.boundary_regions(boundary_in_neighbour, label=region.label):
+                neighbour_region_world = neighbour_block.region_to_world(reg)
+                if check_overlap(region_world, neighbour_region_world):
+                    anchor_neighbour = get_anchor(neighbour_region_world)
+                    anchor_reg = get_anchor(region_world)
+
+                    regions_dict[anchor_neighbour] = anchor_reg
+
+    return regions_dict, regions
 
 
 def extract_annotations(axistags: str, labels_data) -> Tuple[Region, ...]:
@@ -220,3 +347,16 @@ def extract_annotations(axistags: str, labels_data) -> Tuple[Region, ...]:
     regions = tuple(Region(axistags=axistags, slices=sl, label=label) for sl, label in zip(slices[1::], labels[1::]))
 
     return regions
+
+
+def check_overlap(region_a: Region, region_b: Region) -> bool:
+    assert region_a.axistags == region_b.axistags
+
+    overlap = True
+    for k, v in region_a.tagged_slicing.items():
+        if k not in SPATIAL_AXES:
+            continue
+        if not (v.stop >= region_b.tagged_slicing[k].start and region_b.tagged_slicing[k].stop >= v.start):
+            return False
+
+    return overlap
