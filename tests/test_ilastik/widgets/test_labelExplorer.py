@@ -2,10 +2,9 @@ import numpy
 import pytest
 import vigra
 
-from ilastik.applets.labeling.labelExplorerGui import (
+from ilastik.applets.labeling.connectLabels import (
     Block,
     BlockBoundary,
-    BoundaryDescr,
     BoundaryDescrRelative,
     Region,
     extract_annotations,
