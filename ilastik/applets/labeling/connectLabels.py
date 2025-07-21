@@ -22,7 +22,7 @@ from dataclasses import dataclass
 from enum import IntEnum
 from functools import partial
 from itertools import product
-from typing import List, Literal, Optional, Tuple, Union
+from typing import Dict, Iterable, List, Literal, Optional, Sequence, Tuple, Union
 
 import vigra
 from vigra.analysis import extractRegionFeatures
@@ -43,24 +43,45 @@ class BlockBoundary(IntEnum):
     STOP = 2
 
 
-BoundaryDescrRelative = dict[Literal["x", "y", "z"], BlockBoundary]
-BoundaryDescr = dict[Literal["x", "y", "z"], Union[int, None]]
+SpatialAxesKeys = Literal["x", "y", "z"]
+
+BoundaryDescrRelative = Dict[SpatialAxesKeys, BlockBoundary]
+BoundaryDescr = Dict[SpatialAxesKeys, Union[int, None]]
+
+
+def add_tagged_coords(t1: Dict[str, float], t2: Dict[str, float]) -> Dict[str, float]:
+    assert set(t1.keys()).issubset(set(t2.keys())), f"{list(t1.keys())=}, {list(t2.keys())=}"
+    return {k: t1[k] + t2[k] for k in t1.keys()}
+
+
+def _is_unbound(sl: slice) -> bool:
+    return sl.start is None or sl.stop is None
 
 
 @dataclass(slots=True, frozen=True)
 class Region:
-    axistags: str
+    axistags: Sequence[Literal[SpatialAxesKeys, "c", "t"]]
     slices: Tuple[slice, ...]
     label: int
 
+    def __post_init__(self):
+        if len(self.axistags) != len(self.slices):
+            raise ValueError(f"{self.axistags=} and {self.slices=} not matching in length")
+
+        if any(_is_unbound(sl) for sl in self.slices):
+            raise ValueError(f"Cannot construct region with unbound slicing")
+
     @property
-    def tagged_slicing(self):
-        # zip here hides that axistags and slices might be out of sync, in fact axistags have a c....
+    def tagged_slicing(self) -> Dict[str, slice]:
         return dict(zip(self.axistags, self.slices))
 
     @property
-    def tagged_center(self):
-        return {k: int((sl.stop - sl.start) / 2) + sl.start for k, sl in self.tagged_slicing.items()}
+    def tagged_center(self) -> Dict[str, float]:
+        """Returns the center of the interval defined by slicing
+
+        Stop element is assumed to be exclusive.
+        """
+        return {k: (sl.stop - 1 - sl.start) / 2 + sl.start for k, sl in self.tagged_slicing.items()}
 
     def is_at_boundary(self, boundary: BoundaryDescr) -> bool:
         if all(b is None for b in boundary.values()):
@@ -77,9 +98,13 @@ class Region:
 
         return is_at_boundary
 
-    @property
-    def key(self):
-        return Tuple((sl.start, sl.stop) for sl in self.slices)
+    def __hash__(self):
+        """
+        Hash based on volume defined by slicing.
+        In our setting with that cannot overlap, start, stop coordinates
+        result in a unique key.
+        """
+        return hash(tuple((sl.start, sl.stop) for sl in self.slices))
 
     @classmethod
     def with_slices(cls, reg: "Region", slices: Tuple[slice, ...]) -> "Region":
@@ -87,28 +112,23 @@ class Region:
         return Region(axistags=reg.axistags, slices=slices, label=reg.label)
 
 
-def add_tagged_coords(t1, t2):
-    assert set(t1.keys()).issubset(set(t2.keys())), f"{list(t1.keys())=}, {list(t2.keys())=}"
-    return {k: t1[k] + t2[k] for k in t1.keys()}
-
-
 @dataclass(frozen=True)
 class Block:
-    axistags: str
+    axistags: Sequence[Literal[SpatialAxesKeys, "c", "t"]]
     slices: Tuple[slice, ...]
-    regions: List[Region]
+    regions: Sequence[Region]
     neigbourhood: Neighbourhood = Neighbourhood.NDIM
 
     @property
     def key(self) -> Tuple[int, ...]:
-        return Tuple(sl.start for sl in self.slices)
+        return tuple(sl.start for sl in self.slices)
 
     @property
     def tagged_slices(self):
         return {tag: sl for tag, sl in zip(self.axistags, self.slices)}
 
     @property
-    def spatial_axes(self):
+    def spatial_axes(self) -> List[str]:
         return [x for x in self.axistags if x in SPATIAL_AXES]
 
     @property
@@ -119,7 +139,7 @@ class Block:
         if self.neigbourhood == Neighbourhood.NONE:
             return
 
-        def boundary_index_from_slice(sl: slice, boundary: BlockBoundary) -> Union[int, None]:
+        def _boundary_index_from_slice(sl: slice, boundary: BlockBoundary) -> Union[int, None]:
             if boundary == BlockBoundary.NONE:
                 return None
             if boundary == BlockBoundary.START:
@@ -129,16 +149,16 @@ class Block:
 
         tagged_boundary = {}
         for at, bd in boundary.items():
-            tagged_boundary[at] = boundary_index_from_slice(self.tagged_slices[at], bd)
+            tagged_boundary[at] = _boundary_index_from_slice(self.tagged_slices[at], bd)
 
-        def labelmatch(region_label) -> bool:
+        def _labelmatch(region_label) -> bool:
             if label == None:
                 return True
             else:
                 return region_label == label
 
         for region in self.regions:
-            if region.is_at_boundary(tagged_boundary) and labelmatch(region.label):
+            if region.is_at_boundary(tagged_boundary) and _labelmatch(region.label):
                 yield region
 
     def boundaries_positive(self):
@@ -210,25 +230,26 @@ def extract_annotations(axistags: str, labels_data) -> Tuple[Region, ...]:
     )
 
     # shape: (n_objs, ndim)
-    max_bb = feats["Coord<Maximum>"].astype("uint32") + 1
-    min_bb = feats["Coord<Minimum>"].astype("uint32")
+    max_bb = feats["Coord<Maximum>"][1:].astype("uint32") + 1
+    min_bb = feats["Coord<Minimum>"][1:].astype("uint32")
 
     slices: list[Tuple[slice, ...]] = []
     for min_, max_ in zip(min_bb, max_bb):
         slices.append(tuple(slice(mi, ma) for mi, ma in zip(min_, max_)))
     # we pass the label image as "image", so minimum will be the same label
-    labels = feats["Minimum"].astype("uint32")
+    labels = feats["Minimum"][1:].astype("uint32")
 
-    regions = Tuple(Region(axistags=axistags, slices=sl, label=label) for sl, label in zip(slices[1::], labels[1::]))
+    spatial_at = [at for at in axistags if at in SPATIAL_AXES]
+    regions = tuple(Region(axistags=spatial_at, slices=sl, label=label) for sl, label in zip(slices, labels))
 
     return regions
 
 
 def connect_regions(non_zero_slicings, label_slot, axistags):
-    regions: dict[Tuple[Tuple[int, int], ...], Region] = {}
-    blocks: dict[Tuple[int, ...], Block] = {}
+    regions: Dict[Region, Region] = {}
+    blocks: Dict[Tuple[int, ...], Block] = {}
 
-    regions_dict: dict[Tuple[Tuple[int, int], ...], Tuple[Tuple[int, int], ...]] = {}
+    regions_dict: Dict[Region, Region] = {}
 
     def extract_single(roi):
         labels_data = vigra.taggedView(label_slot[roi].wait(), "".join(axistags))
@@ -243,7 +264,7 @@ def connect_regions(non_zero_slicings, label_slot, axistags):
     pool.wait()
     pool.clean()
 
-    def invert_boundary(boundary: dict[str, BlockBoundary]) -> dict[str, BlockBoundary]:
+    def invert_boundary(boundary: Dict[str, BlockBoundary]) -> Dict[str, BlockBoundary]:
         # TODO: do this with a dict
         b = {}
         for k, d in boundary.items():
@@ -257,10 +278,10 @@ def connect_regions(non_zero_slicings, label_slot, axistags):
         return b
 
     def get_anchor(region):
-        if region.key not in regions_dict:
-            return region.key
+        if region not in regions_dict:
+            return region
 
-        current = region.key
+        current = region
         while True:
             anchor = regions_dict[current]
             if anchor == current:
@@ -270,9 +291,10 @@ def connect_regions(non_zero_slicings, label_slot, axistags):
     for block in blocks.values():
         for region in block.regions:
             region_world = block.region_to_world(region)
-            regions[region_world.key] = region_world
-            if region_world.key not in regions_dict:
-                regions_dict[region_world.key] = region_world.key
+            regions[region_world] = region_world
+            if region_world not in regions_dict:
+                regions_dict[region_world] = region_world
+
         for boundary, region in block.boundary_regions_positive():
             region_world = block.region_to_world(region)
             block_start = block.neighbour_start_coordinates(boundary)
@@ -297,6 +319,7 @@ def check_overlap(region_a: Region, region_b: Region) -> bool:
 
     overlap = True
     for k, v in region_a.tagged_slicing.items():
+
         if k not in SPATIAL_AXES:
             continue
         if not (v.stop >= region_b.tagged_slicing[k].start and region_b.tagged_slicing[k].stop >= v.start):

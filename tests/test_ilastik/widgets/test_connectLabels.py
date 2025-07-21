@@ -1,3 +1,4 @@
+from itertools import zip_longest
 import numpy
 import pytest
 import vigra
@@ -9,6 +10,21 @@ from ilastik.applets.labeling.connectLabels import (
     Region,
     extract_annotations,
 )
+
+
+def test_region_construction_raises_on_axistags_slices_mismatch():
+    with pytest.raises(ValueError):
+        _ = Region(axistags="z", slices=(slice(0, 1), slice(1, 2)), label=1)
+
+
+def test_region_construction_raises_on_unbound_slicing():
+    with pytest.raises(ValueError):
+        _ = Region(axistags="z", slices=(slice(None, 1),), label=1)
+
+
+def test_region_center():
+    region = Region(axistags="xy", slices=(slice(1, 2), slice(0, 42)), label=1)
+    assert region.tagged_center == dict(x=1.0, y=20.5)
 
 
 @pytest.mark.parametrize(
@@ -129,6 +145,6 @@ def test_extract_annotations():
     assert len([r for r in regions if r.label == 2]) == 1
 
     r_2 = next((r for r in regions if r.label == 2))
-    assert r_2.axistags == axistags
+    assert all(a == b for a, b in zip_longest(r_2.axistags, axistags))
     assert r_2.tagged_slicing["x"] == slice(3, 5)
     assert r_2.tagged_slicing["y"] == slice(3, 7)

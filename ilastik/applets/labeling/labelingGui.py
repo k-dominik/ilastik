@@ -359,7 +359,7 @@ class LabelingGui(LayerViewerGui):
 
         def _goto(position_dict):
             # xyz
-            pos = [position_dict[k] if k in position_dict else 0 for k in "xyz"]
+            pos = [int(position_dict[k]) if k in position_dict else 0 for k in "xyz"]
             self.volumeEditorWidget.editor.posModel.slicingPos = pos
             self.volumeEditorWidget.editor.posModel.cursorPos = pos
             self.volumeEditorWidget.editor.navCtrl.panSlicingViews(pos, [0, 1, 2])
