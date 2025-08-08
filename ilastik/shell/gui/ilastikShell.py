@@ -40,6 +40,7 @@ from PyQt5.QtCore import pyqtSignal, QObject, Qt, QUrl, QTimer
 from PyQt5.QtGui import QKeySequence, QIcon, QFont, QDesktopServices, QPixmap
 from PyQt5.QtWidgets import (
     QMainWindow,
+    QSplitter,
     QWidget,
     QMenu,
     QApplication,
@@ -1415,11 +1416,17 @@ class IlastikShell(QMainWindow):
             if secondaryControlsWidget is not None:
                 if self.secondaryControlsStack.indexOf(secondaryControlsWidget) == -1:
                     self.secondaryControlsStack.addWidget(secondaryControlsWidget)
+                    self.sideSplitter.splitterMoved.connect(secondaryControlsWidget.sync_state)
                 self.secondaryControlsStack.setCurrentWidget(secondaryControlsWidget)
                 # For test recording purposes, every gui we add MUST have a unique name
                 secondaryControlsWidget.setObjectName(
                     "secondaryControlsStack_applet_{}_lane_{}".format(applet_index, self.currentImageIndex)
                 )
+            else:
+                # put in empty widget
+                sizes = self.sideSplitter.sizes()
+                new_sizes = [sizes[0], sizes[1] + sizes[2], 0]
+                self.sideSplitter.setSizes(new_sizes)
 
     def refreshAppletDrawer(self, applet_index):
         if applet_index < len(self._applets):
