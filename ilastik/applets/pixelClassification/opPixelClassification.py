@@ -95,6 +95,7 @@ class OpPixelClassification(Operator):
 
     LabelImages = OutputSlot(level=1)  # Labels from the user
     NonzeroLabelBlocks = OutputSlot(level=1)  # A list if slices that contain non-zero label values
+    LabelCacheBlockShape = OutputSlot(level=1)  # Block shape of the label cache
     Classifier = OutputSlot()  # We provide the classifier as an external output for other applets to use
 
     CachedPredictionProbabilities = OutputSlot(
@@ -154,6 +155,7 @@ class OpPixelClassification(Operator):
         self.opLabelPipeline.DeleteLabel.setValue(-1)
         self.LabelImages.connect(self.opLabelPipeline.Output)
         self.NonzeroLabelBlocks.connect(self.opLabelPipeline.nonzeroBlocks)
+        self.LabelCacheBlockShape.connect(self.opLabelPipeline.CacheBlockShape)
 
         # Hook up the Training operator
         self.opTrain = OpTrainClassifierBlocked(parent=self)
@@ -415,6 +417,7 @@ class OpLabelPipeline(Operator):
 
     Output = OutputSlot()
     nonzeroBlocks = OutputSlot()
+    CacheBlockShape = OutputSlot()
 
     def __init__(self, *args, **kwargs):
         super(OpLabelPipeline, self).__init__(*args, **kwargs)
@@ -428,6 +431,7 @@ class OpLabelPipeline(Operator):
         # Connect external outputs to their internal sources
         self.Output.connect(self.opLabelArray.Output)
         self.nonzeroBlocks.connect(self.opLabelArray.nonzeroBlocks)
+        self.CacheBlockShape.connect(self.opLabelArray.BlockShape)
 
     def setupOutputs(self):
         tagged_shape = self.RawImage.meta.getTaggedShape()
@@ -439,6 +443,7 @@ class OpLabelPipeline(Operator):
 
         # Aim for blocks that are roughly 20px
         block_shape = determineBlockShape(list(tagged_shape.values()), 40**3)
+        print(block_shape)
         self.opLabelArray.blockShape.setValue(block_shape)
 
     def setInSlot(self, slot, subindex, roi, value):

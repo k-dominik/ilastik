@@ -1,7 +1,3 @@
-from __future__ import print_function
-from __future__ import absolute_import
-from __future__ import division
-
 ###############################################################################
 #   ilastik: interactive learning and segmentation toolkit
 #
@@ -33,31 +29,34 @@ from functools import partial
 # Third-party
 import numpy
 from PyQt5 import uic
-from PyQt5.QtCore import Qt, pyqtSlot, pyqtRemoveInputHook, pyqtRestoreInputHook, QSize
+from PyQt5.QtCore import Qt, pyqtSlot, QSize
 from PyQt5.QtWidgets import (
     QMessageBox,
     QVBoxLayout,
     QDialogButtonBox,
     QListWidget,
     QListWidgetItem,
-    QApplication,
     QAction,
     QPushButton,
     QLineEdit,
     QDialog,
-    QComboBox,
     QTreeWidget,
     QTreeWidgetItem,
     QWidget,
     QSizePolicy,
     QMenu,
 )
-from PyQt5.QtGui import QColor, QIcon, QCursor
+from PyQt5.QtGui import QColor
 
 
 # HCI
+from ilastik.applets.labeling import labelExplorerGui
 from volumina.api import createDataSource, AlphaModulatedLayer, GrayscaleLayer, ColortableLayer
 from volumina.utility import ShortcutManager
+
+from ilastik.applets.pixelClassification.opPixelClassification import OpPixelClassification
+from lazyflow.operators.opCompressedUserLabelArray import OpCompressedUserLabelArray
+from lazyflow.slot import InputSlot
 
 from lazyflow.utility import PathComponents
 from lazyflow.roi import slicing_to_string
@@ -462,6 +461,7 @@ class PixelClassificationGui(LabelingGui):
         self._currentlySavingPredictions = False
 
         self.labelingDrawerUi.labelListView.support_merges = True
+        self.labelingDrawerUi.labelListView.support_label_explorer = True
 
         self.labelingDrawerUi.liveUpdateButton.toggled.connect(self.setLiveUpdateEnabled)
 
@@ -497,6 +497,7 @@ class PixelClassificationGui(LabelingGui):
             lambda *args: self.setLiveUpdateEnabled()
         )
         self.__cleanup_fns.append(unsub_callback)
+
         self.setLiveUpdateEnabled()
 
     def initSuggestFeaturesDialog(self):

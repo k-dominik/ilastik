@@ -63,10 +63,12 @@ class ColorDialog(QDialog):
 class LabelListView(ListView):
     clearRequested = pyqtSignal(int, str)  # row, name
     mergeRequested = pyqtSignal(int, str, int, str)  # from_row, from_name, to_row, to_name
+    labelExplorerRequested = pyqtSignal()
 
     def __init__(self, parent=None):
         super(LabelListView, self).__init__(parent=parent)
         self.support_merges = False
+        self.supports_label_explorer = False
         self._colorDialog = ColorDialog(self)
         self.resetEmptyMessage("no labels defined yet")
 
@@ -119,6 +121,9 @@ class LabelListView(ListView):
                 )
                 if to_row == from_index_to_name.row():
                     action.setEnabled(False)
+
+        if self.support_label_explorer:
+            menu.addAction("Open Label Explorer", partial(self.labelExplorerRequested.emit))
 
         menu.exec_(self.mapToGlobal(event.pos()))
 
