@@ -1,7 +1,7 @@
 ###############################################################################
 #   ilastik: interactive learning and segmentation toolkit
 #
-#       Copyright (C) 2011-2014, the ilastik developers
+#       Copyright (C) 2011-2025, the ilastik developers
 #                                <team@ilastik.org>
 #
 # This program is free software; you can redistribute it and/or
@@ -86,6 +86,13 @@ class AppletGuiInterface(with_metaclass(ABCMeta, object)):
         """
         Return the widget that controls how the content of the central widget is displayed.
         Typically this consists of a layer list control.
+        """
+        raise NotImplementedError
+
+    @abstractmethod
+    def secondaryControlsWidget(self):
+        """
+        Return the widget that allows for more involved interaction with the data specific to the current applet.
         """
         raise NotImplementedError
 
