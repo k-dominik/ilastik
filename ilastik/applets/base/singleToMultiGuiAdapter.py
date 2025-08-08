@@ -18,7 +18,11 @@
 # on the ilastik web site at:
 # 		   http://ilastik.org/license.html
 ###############################################################################
-class SingleToMultiGuiAdapter(object):
+from typing import Union, TYPE_CHECKING, Sequence
+from ilastik.applets.base.appletGuiInterface import AppletGuiInterface
+
+
+class SingleToMultiGuiAdapter(AppletGuiInterface):
     """
     Utility class used by the StandardApplet to wrap several single-image
     GUIs into one multi-image GUI, which is what the shell/Applet API requires.
@@ -69,21 +73,23 @@ class SingleToMultiGuiAdapter(object):
         """
         Return the central widget of the currently selected single-image gui.
         """
-        if self.currentGui() is None:
+        current_gui = self.currentGui()
+        if current_gui is None:
             return None
-        return self.currentGui().centralWidget()
+        return current_gui.centralWidget()
 
     def menus(self):
         """
         Return the menus of the currently selected single-image gui.
         """
-        if self.currentGui() is None:
+        current_gui = self.currentGui()
+        if current_gui is None:
             return None
-        return self.currentGui().menus()
+        return current_gui.menus()
 
     def viewerControlWidget(self):
         """
-        Return the viewer control widget for the currently selectd single-image gui.
+        Return the viewer control widget for the currently selected single-image gui.
         """
         if self.currentGui() is None:
             return None
