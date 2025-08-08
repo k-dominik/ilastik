@@ -384,8 +384,6 @@ class LabelingGui(LayerViewerGui):
             self.volumeEditorWidget.editor.navCtrl.panSlicingViews(pos, [0, 1, 2])
 
         label_explorer_widget.positionRequested.connect(_goto)
-        # self.label_explorer_widget.closed.connect(self._cleanup_label_explorer)
-        # self.label_explorer_widget.show()
 
         return label_explorer_widget
 
