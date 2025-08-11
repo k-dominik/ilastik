@@ -467,7 +467,7 @@
          <widget class="QWidget" name="widget" native="true">
           <layout class="QVBoxLayout" name="verticalLayout_2">
            <item>
-            <widget class="QSplitter" name="sideSplitter">
+            <widget class="HorizontalMainSplitter" name="sideSplitter">
              <property name="orientation">
               <enum>Qt::Horizontal</enum>
              </property>
@@ -682,6 +682,11 @@
   <customwidget>
    <class>StartupContainer</class>
    <extends>QWidget</extends>
+   <header>ilastik.shell.gui.ilastikShell</header>
+  </customwidget>
+  <customwidget>
+   <class>HorizontalMainSplitter</class>
+   <extends>QSplitter</extends>
    <header>ilastik.shell.gui.ilastikShell</header>
   </customwidget>
  </customwidgets>

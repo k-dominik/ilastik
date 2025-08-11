@@ -29,18 +29,19 @@ import numbers
 import platform
 import threading
 import warnings
-from typing import Optional, Type, Union
+from typing import TYPE_CHECKING, Optional, Type, Union
 
 # SciPy
 import numpy
 
 # PyQt
 from PyQt5 import uic
-from PyQt5.QtCore import pyqtSignal, QObject, Qt, QUrl, QTimer
-from PyQt5.QtGui import QKeySequence, QIcon, QFont, QDesktopServices, QPixmap
+from PyQt5.QtCore import QRect, QRectF, QSize, pyqtSignal, QObject, Qt, QUrl, QTimer
+from PyQt5.QtGui import QColor, QFontMetrics, QKeySequence, QIcon, QFont, QDesktopServices, QPainter, QPen, QPixmap
 from PyQt5.QtWidgets import (
     QMainWindow,
     QSplitter,
+    QSplitterHandle,
     QWidget,
     QMenu,
     QApplication,
@@ -100,6 +101,9 @@ from ilastik.widgets.filePathButton import FilePathButton
 
 # Import all known workflows now to make sure they are all registered with getWorkflowFromName()
 import ilastik.workflows
+
+if TYPE_CHECKING:
+    from PyQt5.QtGui import QPaintEvent
 
 try:
     import libdvid
@@ -395,6 +399,56 @@ FLAT_BUTTON_STYLE = r"""
         background-color: palette(dark);
     }
 """
+
+
+class LabeledHandle(QSplitterHandle):
+    def __init__(self, orientation, parent):
+        super().__init__(orientation, parent)
+        self._color = QApplication.palette().windowText().color()
+
+    def paintEvent(self, a0: "QPaintEvent") -> None:
+        super().paintEvent(a0)
+        assert self.orientation() == Qt.Horizontal
+        painter = QPainter(self)
+
+        painter.setRenderHint(QPainter.Antialiasing)
+
+        painter.setPen(self._color)
+        font = QFont("monospace", int(QApplication.font().pointSize() * 0.9), QFont.Bold)
+        painter.setFont(font)
+        text = "LABELS"
+        text_w = "\n".join(text)
+
+        painter.drawText(self.rect(), Qt.AlignHCenter, text_w)
+
+        fm = QFontMetrics(font)
+        r2 = fm.boundingRect(text)
+        painter.drawRoundedRect(0, 0, self.width(), len(text) * fm.height(), 5, 5)
+
+    def sizeHint(self):
+        assert self.orientation() == Qt.Horizontal
+        return QSize(20, super().sizeHint().height())
+
+    def enterEvent(self, a0) -> None:
+        # NOT WORKING
+        self._color = QColor("red")
+        return super().enterEvent(a0)
+
+    def leaveEvent(self, a0) -> None:
+        self._color = QApplication.palette().windowText().color()
+        return super().leaveEvent(a0)
+
+
+class HorizontalMainSplitter(QSplitter):
+    def createHandle(self):
+
+        n_widgets = self.count()
+        print("HandleRequested", self.count())
+
+        if n_widgets == 2:
+            return LabeledHandle(self.orientation(), self)
+        else:
+            return QSplitterHandle(self.orientation(), self)
 
 
 class StartupContainer(QWidget):
@@ -1411,7 +1465,10 @@ class IlastikShell(QMainWindow):
 
     def showSecondaryControls(self, applet_index):
         if applet_index < len(self._applets):
-            secondaryControlsWidget = self._applets[applet_index].getMultiLaneGui().secondaryControlsWidget()
+            if hasattr(self._applets[applet_index].getMultiLaneGui(), "secondaryControlsWidget"):
+                secondaryControlsWidget = self._applets[applet_index].getMultiLaneGui().secondaryControlsWidget()
+            else:
+                secondaryControlsWidget = None
             # Replace the placeholder widget, if possible
             if secondaryControlsWidget is not None:
                 if self.secondaryControlsStack.indexOf(secondaryControlsWidget) == -1:
