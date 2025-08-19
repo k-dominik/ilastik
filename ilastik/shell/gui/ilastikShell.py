@@ -906,6 +906,28 @@ class IlastikShell(QMainWindow):
         hide.setCheckable(True)
         hide.toggled.connect(hideApplets)
 
+        def getGlInfo():
+            from PyQt5.QtGui import QOpenGLContext, QSurfaceFormat
+
+            c = QOpenGLContext()
+            ok = c.create()
+            if ok:
+                fmt: QSurfaceFormat = c.format()
+                info = dict(
+                    is_gles=c.isOpenGLES(),
+                    gl_version=f"{fmt.majorVersion()}.{fmt.minorVersion()}",
+                    context_valid=c.isValid(),
+                )
+                logger.info(f"GL info {info}")
+                import json
+
+                QMessageBox.information(self, "GL Info", f"GL info\n{json.dumps(info, indent=2)}")
+            else:
+                logger.info("No info available", "No info available")
+                QMessageBox.information(self, "No info available", "No info available")
+
+        menu.addAction("GL Info").triggered.connect(getGlInfo)
+
         return menu
 
     def _createProfilingSubmenu(self):
