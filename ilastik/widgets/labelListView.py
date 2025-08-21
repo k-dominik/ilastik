@@ -122,9 +122,6 @@ class LabelListView(ListView):
                 if to_row == from_index_to_name.row():
                     action.setEnabled(False)
 
-        if self.support_label_explorer:
-            menu.addAction("Open Label Explorer", partial(self.labelExplorerRequested.emit))
-
         menu.exec_(self.mapToGlobal(event.pos()))
 
 

@@ -29,7 +29,7 @@ import numbers
 import platform
 import threading
 import warnings
-from typing import TYPE_CHECKING, Optional, Type, Union
+from typing import Optional, Type, Union
 
 # SciPy
 import numpy
@@ -37,7 +37,19 @@ import numpy
 # PyQt
 from qtpy import uic
 from qtpy.QtCore import QRect, QRectF, QSize, Signal, QObject, Qt, QUrl, QTimer
-from qtpy.QtGui import QColor, QFontMetrics, QKeySequence, QIcon, QFont, QDesktopServices, QPainter, QPen, QPixmap
+from qtpy.QtGui import (
+    QColor,
+    QDesktopServices,
+    QFontMetrics,
+    QKeySequence,
+    QIcon,
+    QFont,
+    QDesktopServices,
+    QPainter,
+    QPaintEvent,
+    QPen,
+    QPixmap,
+)
 from qtpy.QtWidgets import (
     QMainWindow,
     QSplitter,
@@ -46,18 +58,27 @@ from qtpy.QtWidgets import (
     QMenu,
     QApplication,
     QPushButton,
+    QDialogButtonBox,
     QFileDialog,
+    QHBoxLayout,
+    QInputDialog,
+    QLabel,
+    QMainWindow,
+    QMenu,
     QMessageBox,
     QProgressBar,
-    QInputDialog,
+    QPushButton,
+    QSpinBox,
+    QSplitter,
+    QSplitterHandle,
+    QStyle,
+    QStyleOptionButton,
+    QStylePainter,
+    QTextEdit,
     QToolButton,
     QVBoxLayout,
-    QHBoxLayout,
-    QLabel,
-    QDialog,
-    QSpinBox,
-    QDialogButtonBox,
-    QTextEdit,
+    QWidget,
+    qApp,
 )
 
 # lazyflow
@@ -101,9 +122,6 @@ from ilastik.widgets.filePathButton import FilePathButton
 
 # Import all known workflows now to make sure they are all registered with getWorkflowFromName()
 import ilastik.workflows
-
-if TYPE_CHECKING:
-    from PyQt5.QtGui import QPaintEvent
 
 try:
     import libdvid
@@ -401,54 +419,69 @@ FLAT_BUTTON_STYLE = r"""
 """
 
 
+class VerticalButton(QPushButton):
+
+    def sizeHint(self) -> QSize:
+        return super().sizeHint().transposed()
+
+    def paintEvent(self, a0: QPaintEvent) -> None:
+        painter = QStylePainter(self)
+        options = QStyleOptionButton()
+        options.initFrom(self)
+        options.text = self.text()
+        painter.rotate(-90)
+        painter.translate(-1 * self.height(), 0)
+        options.rect = options.rect.transposed()
+        painter.drawControl(QStyle.CE_PushButton, options)
+
+
 class LabeledHandle(QSplitterHandle):
     def __init__(self, orientation, parent):
         super().__init__(orientation, parent)
-        self._color = QApplication.palette().windowText().color()
+        self.is_collapsed: bool
+        self.toggle_button = VerticalButton("Label Table", self)
+        self.toggle_button.setAttribute(Qt.WA_TransparentForMouseEvents)
+        self.toggle_button.setFocusPolicy(Qt.NoFocus)
+        self.setToolTip("Pixel label table. Double click to show/hide, click and drag to resize.")
 
-    def paintEvent(self, a0: "QPaintEvent") -> None:
-        super().paintEvent(a0)
-        assert self.orientation() == Qt.Horizontal
-        painter = QPainter(self)
-
-        painter.setRenderHint(QPainter.Antialiasing)
-
-        painter.setPen(self._color)
-        font = QFont("monospace", int(QApplication.font().pointSize() * 0.9), QFont.Bold)
-        painter.setFont(font)
-        text = "LABELS"
-        text_w = "\n".join(text)
-
-        painter.drawText(self.rect(), Qt.AlignHCenter, text_w)
-
-        fm = QFontMetrics(font)
-        r2 = fm.boundingRect(text)
-        painter.drawRoundedRect(0, 0, self.width(), len(text) * fm.height(), 5, 5)
+    def resizeEvent(self, a0: QResizeEvent):
+        super().resizeEvent(a0)
+        # sync up button position
+        self.toggle_button.setMaximumWidth(self.width())
+        self.toggle_button.move(
+            self.width() // 2 - self.toggle_button.width() // 2, self.height() // 2 - self.toggle_button.height() // 2
+        )
 
     def sizeHint(self):
         assert self.orientation() == Qt.Horizontal
         return QSize(20, super().sizeHint().height())
 
-    def enterEvent(self, a0) -> None:
-        # NOT WORKING
-        self._color = QColor("red")
-        return super().enterEvent(a0)
-
-    def leaveEvent(self, a0) -> None:
-        self._color = QApplication.palette().windowText().color()
-        return super().leaveEvent(a0)
+    def mouseDoubleClickEvent(self, a0):
+        self.parent().toggle_contents()
+        a0.accept()
 
 
 class HorizontalMainSplitter(QSplitter):
     def createHandle(self):
-
         n_widgets = self.count()
-        print("HandleRequested", self.count())
 
         if n_widgets == 2:
-            return LabeledHandle(self.orientation(), self)
+            w = LabeledHandle(self.orientation(), self)
+            return w
         else:
             return QSplitterHandle(self.orientation(), self)
+
+    def toggle_contents(self):
+        sizes = self.sizes()
+
+        was_collapsed = sizes[2] == 0
+
+        if was_collapsed:
+            sizes = [sizes[0], sizes[1] - 200, 200]
+        else:
+            sizes = [sizes[0], sizes[1] + sizes[2], 0]
+
+        self.setSizes(sizes)
 
 
 class StartupContainer(QWidget):

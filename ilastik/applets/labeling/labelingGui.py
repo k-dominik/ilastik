@@ -385,6 +385,15 @@ class LabelingGui(LayerViewerGui):
 
         label_explorer_widget.positionRequested.connect(_goto)
 
+        def update_labels(*args, **kwargs):
+            label_names = [x.name for x in self.labelListData]
+            label_explorer_widget._lookup_table = {str(i + 1): y for i, y in enumerate(label_names)}
+            label_explorer_widget.tableWidget.viewport().update()
+
+        update_labels()
+
+        self._labelControlUi.labelListModel.dataChanged.connect(update_labels)
+
         return label_explorer_widget
 
     def _cleanup_label_explorer(self):
