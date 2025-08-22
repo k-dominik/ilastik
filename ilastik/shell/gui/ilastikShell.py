@@ -45,6 +45,7 @@ from qtpy.QtGui import (
     QIcon,
     QFont,
     QDesktopServices,
+    QMouseEvent,
     QPainter,
     QPaintEvent,
     QPen,
@@ -436,7 +437,7 @@ class VerticalButton(QPushButton):
 
 
 class LabeledHandle(QSplitterHandle):
-    def __init__(self, orientation, parent):
+    def __init__(self, orientation, parent: "HorizontalMainSplitter"):
         super().__init__(orientation, parent)
         self.is_collapsed: bool
         self.toggle_button = VerticalButton("Label Table", self)
@@ -444,20 +445,22 @@ class LabeledHandle(QSplitterHandle):
         self.toggle_button.setFocusPolicy(Qt.NoFocus)
         self.setToolTip("Pixel label table. Double click to show/hide, click and drag to resize.")
 
-    def resizeEvent(self, a0: QResizeEvent):
+    def resizeEvent(self, a0: QResizeEvent) -> None:
         super().resizeEvent(a0)
         # sync up button position
-        self.toggle_button.setMaximumWidth(self.width())
-        self.toggle_button.move(
-            self.width() // 2 - self.toggle_button.width() // 2, self.height() // 2 - self.toggle_button.height() // 2
-        )
+        if self.orientation() == Qt.Horizontal:
+            self.toggle_button.setMaximumWidth(self.width())
+            self.toggle_button.move(
+                self.width() // 2 - self.toggle_button.width() // 2,
+                self.height() // 2 - self.toggle_button.height() // 2,
+            )
 
-    def sizeHint(self):
+    def sizeHint(self) -> QSize:
         assert self.orientation() == Qt.Horizontal
         return QSize(20, super().sizeHint().height())
 
-    def mouseDoubleClickEvent(self, a0):
-        self.parent().toggle_contents()
+    def mouseDoubleClickEvent(self, a0: QMouseEvent) -> None:
+        self.parent().toggle_secondary_contents()
         a0.accept()
 
 
