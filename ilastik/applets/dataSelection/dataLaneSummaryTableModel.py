@@ -137,7 +137,7 @@ class DataLaneSummaryTableModel(QAbstractItemModel):
             return self._getDisplayRoleData(index)
 
     def index(self, row, column, parent=QModelIndex()):
-        return self.createIndex(row, column, object=None)
+        return self.createIndex(row, column, None)
 
     def parent(self, index):
         return QModelIndex()

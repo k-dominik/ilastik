@@ -156,7 +156,7 @@ class NotificationsWindow(QTextEdit):
 
     def __init__(self, data, parent=None):
         super().__init__(parent)
-        self.setWindowFlag(True)
+        self.setWindowFlag(Qt.Window)
         self._setup_ui(data)
 
     def _jump_to_end(self):
@@ -1480,9 +1480,6 @@ class IlastikShell(QMainWindow):
             self.projectManager.ignoreDirty(True)
         elif requestAction == ShellRequest.RequestEnableDirtyTracking:
             self.projectManager.ignoreDirty(False)
-
-    def __len__(self):
-        return len(self._applets)
 
     def __getitem__(self, index):
         return self._applets[index]

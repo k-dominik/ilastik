@@ -145,7 +145,7 @@ class DatasetDetailedInfoTableModel(QAbstractItemModel):
         return super().flags(index)
 
     def index(self, row, column, parent=QModelIndex()):
-        return self.createIndex(row, column, object=None)
+        return self.createIndex(row, column, None)
 
     def parent(self, index):
         return QModelIndex()

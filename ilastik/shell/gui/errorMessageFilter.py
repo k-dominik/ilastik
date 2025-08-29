@@ -33,7 +33,7 @@ class ErrorMessageFilter(QObject):
     """
 
     def __init__(self, parent):
-        super(QObject, self).__init__(parent)
+        super().__init__(parent)
         self.messages = {}
         self.timer = QTimer(self)
         self.timer.setSingleShot(True)

@@ -82,7 +82,7 @@ class BatchRoleWidget(QWidget):
         self.clear_button = QPushButton(f"Clear {self._role_name} Files")
         button_layout = QHBoxLayout()
         button_layout.addWidget(self.select_button)
-        button_layout.addSpacerItem(QSpacerItem(0, 0, hPolicy=QSizePolicy.Expanding))
+        button_layout.addSpacerItem(QSpacerItem(0, 0, QSizePolicy.Expanding))
         button_layout.addWidget(self.clear_button)
         button_layout.setContentsMargins(0, 0, 0, 0)
 

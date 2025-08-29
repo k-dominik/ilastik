@@ -106,17 +106,6 @@ class TreeNode(QTreeWidgetItem):
         l.append(report.id)
         return l
 
-    def __lt__(self, other):
-        col = self.treeWidget().sortColumn()
-        if col == self._size_index:
-            a = self.data(col, Qt.DisplayRole)
-            a = TreeNode.extract_numeric_size(a)
-            b = other.data(col, Qt.DisplayRole)
-            b = TreeNode.extract_numeric_size(b)
-            return a < b
-        else:
-            return super(TreeNode, self).__lt__(other)
-
     @staticmethod
     def constructFrom(other):
         node = TreeNode()

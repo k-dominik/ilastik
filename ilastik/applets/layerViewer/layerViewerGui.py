@@ -78,12 +78,12 @@ class LayerViewerGuiMetaclass(type(QWidget)):
         """
         # Base class first. (type is our baseclass)
         # type.__call__ calls instance.__init__ internally
-        instance = super(LayerViewerGuiMetaclass, cls).__call__(*args, **kwargs)
+        instance = super().__call__(*args, **kwargs)
         instance._after_init()
         return instance
 
 
-class LayerViewerGui(with_metaclass(LayerViewerGuiMetaclass, QWidget)):
+class LayerViewerGui(QWidget, metaclass=LayerViewerGuiMetaclass):
     """
     Implements an applet GUI whose central widget is a VolumeEditor
     and whose layer controls simply contains a layer list widget.
