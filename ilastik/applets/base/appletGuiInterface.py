@@ -20,6 +20,10 @@
 ###############################################################################
 from abc import ABCMeta, abstractmethod
 from future.utils import with_metaclass
+from typing import TYPE_CHECKING, List, Union
+
+if TYPE_CHECKING:
+    from PyQt5.QtWidgets import QMenu, QWidget
 
 
 def _has_attribute(cls, attr):
@@ -61,28 +65,28 @@ class AppletGuiInterface(with_metaclass(ABCMeta, object)):
         pass
 
     @abstractmethod
-    def centralWidget(self):
+    def centralWidget(self) -> Union["QWidget", None]:
         """
         Return the widget that will be displayed in the main viewer area.
         """
         raise NotImplementedError
 
     @abstractmethod
-    def appletDrawer(self):
+    def appletDrawer(self) -> Union["QWidget", None]:
         """
         Return the drawer widget for this applet.
         """
         raise NotImplementedError
 
     @abstractmethod
-    def menus(self):
+    def menus(self) -> Union[List["QMenu"], None]:
         """
         Return a list of QMenu widgets to be shown in the menu bar when this applet is visible.
         """
         raise NotImplementedError
 
     @abstractmethod
-    def viewerControlWidget(self):
+    def viewerControlWidget(self) -> Union["QWidget", None]:
         """
         Return the widget that controls how the content of the central widget is displayed.
         Typically this consists of a layer list control.
@@ -90,21 +94,21 @@ class AppletGuiInterface(with_metaclass(ABCMeta, object)):
         raise NotImplementedError
 
     @abstractmethod
-    def secondaryControlsWidget(self):
+    def secondaryControlsWidget(self) -> Union["QWidget", None]:
         """
         Return the widget that allows for more involved interaction with the data specific to the current applet.
         """
         raise NotImplementedError
 
     @abstractmethod
-    def setEnabled(self, enabled):
+    def setEnabled(self, enabled: bool):
         """
         Enable or disable the gui, including applet drawer, central widget, menus, and viewer controls.
         """
         raise NotImplementedError
 
     @abstractmethod
-    def setImageIndex(self, imageIndex):
+    def setImageIndex(self, imageIndex: int):
         """
         Called by the shell when the user has switched the input image he wants to view.
         The GUI should respond by updating the content of the central widget.
@@ -113,7 +117,7 @@ class AppletGuiInterface(with_metaclass(ABCMeta, object)):
         raise NotImplementedError
 
     @abstractmethod
-    def imageLaneAdded(self, laneIndex):
+    def imageLaneAdded(self, laneIndex: int):
         """
         Called when a new image lane has been added to the workflow, and the GUI should respond appropriately.
         Note: The default GUI provided by StandardApplet overrides this for you.
@@ -121,7 +125,7 @@ class AppletGuiInterface(with_metaclass(ABCMeta, object)):
         raise NotImplementedError
 
     @abstractmethod
-    def imageLaneRemoved(self, laneIndex, finalLength):
+    def imageLaneRemoved(self, laneIndex: int, finalLength: int):
         """
         Called when a new image lane is about to be removed from the workflow, and the GUI should respond appropriately.
         The GUI should clean up any resourecs it owns.

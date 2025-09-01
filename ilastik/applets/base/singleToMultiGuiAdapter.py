@@ -18,7 +18,6 @@
 # on the ilastik web site at:
 # 		   http://ilastik.org/license.html
 ###############################################################################
-from typing import Union, TYPE_CHECKING, Sequence
 from ilastik.applets.base.appletGuiInterface import AppletGuiInterface
 
 
@@ -77,6 +76,12 @@ class SingleToMultiGuiAdapter(AppletGuiInterface):
         if current_gui is None:
             return None
         return current_gui.centralWidget()
+
+    def secondaryControlsWidget(self):
+        current_gui = self.currentGui()
+        if current_gui is None:
+            return None
+        return current_gui.secondaryControlsWidget()
 
     def menus(self):
         """

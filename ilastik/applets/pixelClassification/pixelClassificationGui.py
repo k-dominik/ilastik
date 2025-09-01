@@ -1,7 +1,3 @@
-from __future__ import print_function
-from __future__ import absolute_import
-from __future__ import division
-
 ###############################################################################
 #   ilastik: interactive learning and segmentation toolkit
 #
@@ -46,6 +42,7 @@ from qtpy.QtWidgets import (
     QDialog,
     QTreeWidget,
     QTreeWidgetItem,
+    QWidget,
     QSizePolicy,
     QMenu,
 )
@@ -53,8 +50,13 @@ from qtpy.QtGui import QColor, QIcon, QCursor
 
 
 # HCI
+from ilastik.applets.labeling import labelExplorerGui
 from volumina.api import createDataSource, AlphaModulatedLayer, GrayscaleLayer, ColortableLayer
 from volumina.utility import ShortcutManager
+
+from ilastik.applets.pixelClassification.opPixelClassification import OpPixelClassification
+from lazyflow.operators.opCompressedUserLabelArray import OpCompressedUserLabelArray
+from lazyflow.slot import InputSlot
 
 from lazyflow.utility import PathComponents
 from lazyflow.roi import slicing_to_string
@@ -459,6 +461,7 @@ class PixelClassificationGui(LabelingGui):
         self._currentlySavingPredictions = False
 
         self.labelingDrawerUi.labelListView.support_merges = True
+        self.labelingDrawerUi.labelListView.support_label_explorer = True
 
         self.labelingDrawerUi.liveUpdateButton.toggled.connect(self.setLiveUpdateEnabled)
 
@@ -494,6 +497,7 @@ class PixelClassificationGui(LabelingGui):
             lambda *args: self.setLiveUpdateEnabled()
         )
         self.__cleanup_fns.append(unsub_callback)
+
         self.setLiveUpdateEnabled()
 
     def initSuggestFeaturesDialog(self):

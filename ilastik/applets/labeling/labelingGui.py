@@ -25,6 +25,7 @@ import os
 import re
 import logging
 from functools import partial
+from typing import Optional
 
 # Third-party
 import numpy
@@ -40,6 +41,7 @@ from ilastik.shell.gui.iconMgr import ilastikIcons
 from ilastik.widgets.labelListView import Label
 from ilastik.widgets.labelListModel import LabelListModel
 from volumina import colortables
+from lazyflow.slot import InputSlot
 
 # ilastik
 from ilastik.utility import bind, log_exception
@@ -78,6 +80,9 @@ class LabelingGui(LayerViewerGui):
 
     def appletDrawer(self):
         return self._labelControlUi
+
+    def secondaryControlsWidget(self):
+        return self._show_label_explorer()
 
     def stopAndCleanUp(self):
         super(LabelingGui, self).stopAndCleanUp()
@@ -121,7 +126,7 @@ class LabelingGui(LayerViewerGui):
         Equivalent to clicking on the (labelIndex+1)'th position in the label widget."""
         self._labelControlUi.labelListModel.select(labelIndex)
 
-    class LabelingSlots(object):
+    class LabelingSlots:
         """
         This class serves as the parameter for the LabelingGui constructor.
         It provides the slots that the labeling GUI uses to source labels to the display and sink labels from the
@@ -143,10 +148,10 @@ class LabelingGui(LayerViewerGui):
     def __init__(
         self,
         parentApplet,
-        labelingSlots,
+        labelingSlots: LabelingSlots,
         topLevelOperatorView,
-        drawerUiPath=None,
-        rawInputSlot=None,
+        drawerUiPath: Optional[str] = None,
+        rawInputSlot: Optional[InputSlot] = None,
         crosshair=True,
         is_3d_widget_visible=False,
     ):
@@ -204,6 +209,9 @@ class LabelingGui(LayerViewerGui):
         self.thunkEventHandler = ThunkEventHandler(self)
         self._changeInteractionMode(Tool.Navigation)
         self.layersUpdated.connect(self._handleLayersUpdated)
+
+        self.label_explorer_widget = None
+        self.__cleanup_fns.append(self._cleanup_label_explorer)
 
     def _initLabelUic(self, drawerUiPath):
         _labelControlUi = uic.loadUi(drawerUiPath)
@@ -278,6 +286,8 @@ class LabelingGui(LayerViewerGui):
 
         _labelControlUi.labelListView.mergeRequested.connect(handleLabelMergeRequested)
 
+        _labelControlUi.labelListView.labelExplorerRequested.connect(self._show_label_explorer)
+
         # Connect Applet GUI to our event handlers
         if hasattr(_labelControlUi, "AddLabelButton"):
             _labelControlUi.AddLabelButton.setIcon(QIcon(ilastikIcons.AddSel))
@@ -346,11 +356,50 @@ class LabelingGui(LayerViewerGui):
         self.paintBrushSizeIndex = preferences.get("labeling", "paint brush size", default=0)
         self.eraserSizeIndex = preferences.get("labeling", "eraser brush size", default=4)
 
+    def _show_label_explorer(self):
+        from .labelExplorerGui import LabelExplorer
+
+        if self.label_explorer_widget:
+            self.label_explorer_widget.show()
+            self.label_explorer_widget.raise_()
+            return
+
+        tlo: OpPixelClassification = self.topLevelOperatorView
+
+        slot = tlo.NonzeroLabelBlocks
+        slot_out = tlo.LabelImages
+        slot_block_shape = tlo.LabelCacheBlockShape
+
+        label_explorer_widget = LabelExplorer(
+            nonzero_blocks_slot=slot, label_slot=slot_out, block_shape_slot=slot_block_shape, parent=self
+        )
+
+        def _goto(position_dict: dict[str, int]):
+            # xyz
+            assert self.volumeEditorWidget.editor is not None
+            pos = [int(position_dict[k]) if k in position_dict else 0 for k in "xyz"]
+            self.volumeEditorWidget.editor.posModel.slicingPos = pos
+            self.volumeEditorWidget.editor.posModel.cursorPos = pos
+            self.volumeEditorWidget.editor.posModel.time = int(position_dict.get("t", 0))
+            self.volumeEditorWidget.editor.navCtrl.panSlicingViews(pos, [0, 1, 2])
+
+        label_explorer_widget.positionRequested.connect(_goto)
+        # self.label_explorer_widget.closed.connect(self._cleanup_label_explorer)
+        # self.label_explorer_widget.show()
+
+        return label_explorer_widget
+
+    def _cleanup_label_explorer(self):
+        wdgt = self.label_explorer_widget
+        if wdgt:
+            wdgt.cleanup()
+            self.label_explorer_widget = None
+            wdgt.deleteLater()
+
     def onLabelListDataChanged(self, topLeft, bottomRight):
         """Handle changes to the label list selections."""
         firstRow = topLeft.row()
         lastRow = bottomRight.row()
-
         firstCol = topLeft.column()
         lastCol = bottomRight.column()
 

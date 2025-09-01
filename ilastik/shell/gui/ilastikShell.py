@@ -1230,6 +1230,7 @@ class IlastikShell(QMainWindow):
         self.enableWorkflow = self.projectManager is not None
         self.updateShellProjectDisplay()
         # Default to a 50-50 split
+        self.mainSplitter.setCollapsible(2, True)
         totalSplitterHeight = sum(self.mainSplitter.sizes())
         self.mainSplitter.setSizes([totalSplitterHeight // 2, totalSplitterHeight // 2])
 
@@ -1369,6 +1370,7 @@ class IlastikShell(QMainWindow):
             # Select the appropriate central widget, menu widget, and viewer control widget for this applet
             self.showCentralWidget(applet_index)
             self.showViewerControlWidget(applet_index)
+            self.showSecondaryControls(applet_index)
             self.showMenus(applet_index)
             self.refreshAppletDrawer(applet_index)
 
@@ -1396,6 +1398,19 @@ class IlastikShell(QMainWindow):
             viewerControlWidget = self._applets[applet_index].getMultiLaneGui().viewerControlWidget()
             viewerControlWidget.setObjectName(f"viewerControls_applet_{applet_index}_lane_{self.currentImageIndex}")
             self.mainSplitter.setActiveViewerControls(viewerControlWidget)
+
+    def showSecondaryControls(self, applet_index):
+        if applet_index < len(self._applets):
+            secondaryControlsWidget = self._applets[applet_index].getMultiLaneGui().secondaryControlsWidget()
+            # Replace the placeholder widget, if possible
+            if secondaryControlsWidget is not None:
+                if self.secondaryControlsStack.indexOf(secondaryControlsWidget) == -1:
+                    self.secondaryControlsStack.addWidget(secondaryControlsWidget)
+                self.secondaryControlsStack.setCurrentWidget(secondaryControlsWidget)
+                # For test recording purposes, every gui we add MUST have a unique name
+                secondaryControlsWidget.setObjectName(
+                    "secondaryControlsStack_applet_{}_lane_{}".format(applet_index, self.currentImageIndex)
+                )
 
     def refreshAppletDrawer(self, applet_index):
         if applet_index < len(self._applets):
