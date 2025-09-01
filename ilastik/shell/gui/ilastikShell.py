@@ -36,19 +36,15 @@ import numpy
 
 # PyQt
 from qtpy import uic
-from qtpy.QtCore import QRect, QRectF, QSize, Signal, QObject, Qt, QUrl, QTimer
+from qtpy.QtCore import QSize, Signal, QObject, Qt, QUrl, QTimer
 from qtpy.QtGui import (
-    QColor,
     QDesktopServices,
-    QFontMetrics,
     QKeySequence,
     QIcon,
     QFont,
     QDesktopServices,
     QMouseEvent,
-    QPainter,
     QPaintEvent,
-    QPen,
     QPixmap,
 )
 from qtpy.QtWidgets import (
@@ -79,7 +75,6 @@ from qtpy.QtWidgets import (
     QToolButton,
     QVBoxLayout,
     QWidget,
-    qApp,
 )
 
 # lazyflow
