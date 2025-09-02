@@ -415,73 +415,6 @@ FLAT_BUTTON_STYLE = r"""
 """
 
 
-class VerticalButton(QPushButton):
-
-    def sizeHint(self) -> QSize:
-        return super().sizeHint().transposed()
-
-    def paintEvent(self, a0: QPaintEvent) -> None:
-        painter = QStylePainter(self)
-        options = QStyleOptionButton()
-        options.initFrom(self)
-        options.text = self.text()
-        painter.rotate(-90)
-        painter.translate(-1 * self.height(), 0)
-        options.rect = options.rect.transposed()
-        painter.drawControl(QStyle.CE_PushButton, options)
-
-
-class LabeledHandle(QSplitterHandle):
-    def __init__(self, orientation, parent: "HorizontalMainSplitter"):
-        super().__init__(orientation, parent)
-        self.is_collapsed: bool
-        self.toggle_button = VerticalButton("Label Table", self)
-        self.toggle_button.setAttribute(Qt.WA_TransparentForMouseEvents)
-        self.toggle_button.setFocusPolicy(Qt.NoFocus)
-        self.setToolTip("Pixel label table. Double click to show/hide, click and drag to resize.")
-
-    def resizeEvent(self, a0: QResizeEvent) -> None:
-        super().resizeEvent(a0)
-        # sync up button position
-        if self.orientation() == Qt.Horizontal:
-            self.toggle_button.setMaximumWidth(self.width())
-            self.toggle_button.move(
-                self.width() // 2 - self.toggle_button.width() // 2,
-                self.height() // 2 - self.toggle_button.height() // 2,
-            )
-
-    def sizeHint(self) -> QSize:
-        assert self.orientation() == Qt.Horizontal
-        return QSize(20, super().sizeHint().height())
-
-    def mouseDoubleClickEvent(self, a0: QMouseEvent) -> None:
-        self.parent().toggle_secondary_contents()
-        a0.accept()
-
-
-class HorizontalMainSplitter(QSplitter):
-    def createHandle(self):
-        n_widgets = self.count()
-
-        if n_widgets == 2:
-            w = LabeledHandle(self.orientation(), self)
-            return w
-        else:
-            return QSplitterHandle(self.orientation(), self)
-
-    def toggle_contents(self):
-        sizes = self.sizes()
-
-        was_collapsed = sizes[2] == 0
-
-        if was_collapsed:
-            sizes = [sizes[0], sizes[1] - 200, 200]
-        else:
-            sizes = [sizes[0], sizes[1] + sizes[2], 0]
-
-        self.setSizes(sizes)
-
-
 class StartupContainer(QWidget):
     """Container widget for startup page that allows drag-n-dropping project files.
 
@@ -1476,36 +1409,25 @@ class IlastikShell(QMainWindow):
     def showCentralWidget(self, applet_index: int):
         if applet_index < len(self._applets):
             centralWidget = self._applets[applet_index].getMultiLaneGui().centralWidget()
-            centralWidget.setObjectName(f"centralWidget_applet_{applet_index}_lane_{self.currentImageIndex}")
+            if centralWidget:
+                centralWidget.setObjectName(f"centralWidget_applet_{applet_index}_lane_{self.currentImageIndex}")
             self.mainSplitter.setActiveCentralWidget(centralWidget)
 
     def showViewerControlWidget(self, applet_index):
         if applet_index < len(self._applets):
             viewerControlWidget = self._applets[applet_index].getMultiLaneGui().viewerControlWidget()
-            viewerControlWidget.setObjectName(f"viewerControls_applet_{applet_index}_lane_{self.currentImageIndex}")
+            if viewerControlWidget:
+                viewerControlWidget.setObjectName(f"viewerControls_applet_{applet_index}_lane_{self.currentImageIndex}")
             self.mainSplitter.setActiveViewerControls(viewerControlWidget)
 
     def showSecondaryControls(self, applet_index):
         if applet_index < len(self._applets):
-            if hasattr(self._applets[applet_index].getMultiLaneGui(), "secondaryControlsWidget"):
-                secondaryControlsWidget = self._applets[applet_index].getMultiLaneGui().secondaryControlsWidget()
-            else:
-                secondaryControlsWidget = None
-            # Replace the placeholder widget, if possible
-            if secondaryControlsWidget is not None:
-                if self.secondaryControlsStack.indexOf(secondaryControlsWidget) == -1:
-                    self.secondaryControlsStack.addWidget(secondaryControlsWidget)
-                    self.sideSplitter.splitterMoved.connect(secondaryControlsWidget.sync_state)
-                self.secondaryControlsStack.setCurrentWidget(secondaryControlsWidget)
-                # For test recording purposes, every gui we add MUST have a unique name
+            secondaryControlsWidget = self._applets[applet_index].getMultiLaneGui().secondaryControlsWidget()
+            if secondaryControlsWidget:
                 secondaryControlsWidget.setObjectName(
-                    "secondaryControlsStack_applet_{}_lane_{}".format(applet_index, self.currentImageIndex)
+                    f"secondaryControls_applet_{applet_index}_lane_{self.currentImageIndex}"
                 )
-            else:
-                # put in empty widget
-                sizes = self.sideSplitter.sizes()
-                new_sizes = [sizes[0], sizes[1] + sizes[2], 0]
-                self.sideSplitter.setSizes(new_sizes)
+            self.mainSplitter.setActiveSecondaryControls(secondaryControlsWidget)
 
     def refreshAppletDrawer(self, applet_index):
         if applet_index < len(self._applets):

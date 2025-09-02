@@ -20,21 +20,71 @@
 ###############################################################################
 from typing import Optional, Union
 
-from PyQt5.QtCore import Qt
-from PyQt5.QtGui import QColor, QPalette
+from PyQt5.QtCore import Qt, QSize
+from PyQt5.QtGui import QColor, QMouseEvent, QPalette, QResizeEvent, QPaintEvent
 from PyQt5.QtWidgets import (
     QComboBox,
     QFrame,
     QHBoxLayout,
     QLabel,
+    QPushButton,
     QSizePolicy,
     QSplitter,
+    QSplitterHandle,
     QStackedWidget,
     QVBoxLayout,
     QWidget,
+    QStylePainter,
+    QStyleOptionButton,
+    QStyle,
 )
 
 from ilastik.widgets.appletDrawerToolBox import AppletDrawerToolBox
+
+
+class VerticalButton(QPushButton):
+
+    def sizeHint(self) -> QSize:
+        return super().sizeHint().transposed()
+
+    def paintEvent(self, a0: QPaintEvent) -> None:
+        painter = QStylePainter(self)
+        options = QStyleOptionButton()
+        options.initFrom(self)
+        options.text = self.text()
+        painter.rotate(-90)
+        painter.translate(-1 * self.height(), 0)
+        options.rect = options.rect.transposed()
+        painter.drawControl(QStyle.CE_PushButton, options)
+
+
+class LabeledHandle(QSplitterHandle):
+
+    def __init__(self, orientation, parent: "HorizontalMainSplitter"):
+        super().__init__(orientation, parent)
+        self.is_collapsed: bool
+        self.toggle_button = VerticalButton("Secondary controls", self)
+        self.toggle_button.setAttribute(Qt.WA_TransparentForMouseEvents)
+        self.toggle_button.setFocusPolicy(Qt.NoFocus)
+        self.setToolTip("Secondary controls. Double click to show/hide, click and drag to resize.")
+
+    def resizeEvent(self, a0: QResizeEvent) -> None:
+        super().resizeEvent(a0)
+        # sync up button position
+        if self.orientation() == Qt.Horizontal:
+            self.toggle_button.setMaximumWidth(self.width())
+            self.toggle_button.move(
+                self.width() // 2 - self.toggle_button.width() // 2,
+                self.height() // 2 - self.toggle_button.height() // 2,
+            )
+
+    def sizeHint(self) -> QSize:
+        assert self.orientation() == Qt.Horizontal
+        return QSize(20, super().sizeHint().height())
+
+    def mouseDoubleClickEvent(self, a0: QMouseEvent) -> None:
+        self.parent().toggle_secondary_contents()
+        a0.accept()
 
 
 class CentralWidgetStack(QStackedWidget):
@@ -116,12 +166,34 @@ class MainControls(QSplitter):
         self.addWidget(layoutWidget)
 
 
+class SecondaryControlsStack(QStackedWidget):
+    """Stacked widget that will contain/show the secondary controls
+
+    currently LabelExplorer Widget for anything that does labeling
+    """
+
+    def __init__(self, parent: Optional[QWidget] = None) -> None:
+        super().__init__(parent)
+
+        policy = QSizePolicy(QSizePolicy.Preferred, QSizePolicy.Expanding)
+        policy.setHorizontalStretch(2)
+        policy.setVerticalStretch(2)
+        self.setSizePolicy(policy)
+
+        self.setMinimumSize(100, 100)
+        self.setBaseSize(100, 100)
+
+        self.setFrameShape(QFrame.NoFrame)
+        self.setFrameShadow(QFrame.Plain)
+        self.setLineWidth(0)
+
+
 class HorizontalMainSplitter(QSplitter):
     """Widget intended for the main GUI elements
 
     Attrs:
-      mainControls: Contains AppletDrawer and ViewerControlstack
-      centralStack: Contains CentralWidget
+      imageSelectionCombo: combobox for image index switching
+
     """
 
     def __init__(self, parent):
@@ -138,14 +210,19 @@ class HorizontalMainSplitter(QSplitter):
 
         self._centralStack = CentralWidgetStack()
 
+        self._secondaryStack = SecondaryControlsStack()
+
         self.insertWidget(0, self._mainControls)
         self.insertWidget(1, self._centralStack)
+        self.insertWidget(2, self._secondaryStack)
 
         self._viewerControlPlaceholder = QWidget(self)
         self._centralWidgetPlaceholder = QWidget(self)
+        self._secondaryControlsPlaceholder = QWidget(self)
 
         self.setActiveViewerControls(self._viewerControlPlaceholder)
         self.setActiveCentralWidget(self._centralWidgetPlaceholder)
+        self.setActiveSecondaryControls(self._secondaryControlsPlaceholder)
 
     def clearStackedWidgets(self):
         for stacked_widget in [self._viewerControlStack, self._centralStack]:
@@ -171,8 +248,45 @@ class HorizontalMainSplitter(QSplitter):
 
         self._setActiveStackWidget(self._centralStack, centralWidget)
 
+    def setActiveSecondaryControls(self, secondaryControlsWidget: Union[QWidget, None]):
+        if secondaryControlsWidget is not None:
+            if self._secondaryStack.indexOf(secondaryControlsWidget) == -1:
+                self._secondaryStack.addWidget(secondaryControlsWidget)
+                if hasattr(secondaryControlsWidget, "sync_state"):
+                    self.splitterMoved.connect(secondaryControlsWidget.sync_state)
+            self._secondaryStack.setCurrentWidget(secondaryControlsWidget)
+        else:
+            secondaryControlsWidget = self._secondaryControlsPlaceholder
+            self._secondaryStack.setCurrentWidget(secondaryControlsWidget)
+
+        if secondaryControlsWidget == self._secondaryControlsPlaceholder:
+            sizes = self.sizes()
+            new_sizes = [sizes[0], sizes[1] + sizes[2], 0]
+            self.setSizes(new_sizes)
+
     def setMainControlsVisible(self, visible: bool):
         self._mainControls.setVisible(visible)
 
     def setImageSelectionGroupVisible(self, visible: bool):
         self._imageSelectionGroup.setVisible(visible)
+
+    def createHandle(self):
+        n_widgets = self.count()
+
+        if n_widgets == 2:
+            w = LabeledHandle(self.orientation(), self)
+            return w
+        else:
+            return QSplitterHandle(self.orientation(), self)
+
+    def toggle_secondary_contents(self):
+        sizes = self.sizes()
+
+        was_collapsed = sizes[2] == 0
+
+        if was_collapsed:
+            sizes = [sizes[0], sizes[1] - 200, 200]
+        else:
+            sizes = [sizes[0], sizes[1] + sizes[2], 0]
+
+        self.setSizes(sizes)
