@@ -86,6 +86,9 @@ class LabeledHandle(QSplitterHandle):
         self.parent().toggle_secondary_contents()
         a0.accept()
 
+    def setButtonText(self, text: str) -> None:
+        self.toggle_button.setText(text)
+
 
 class CentralWidgetStack(QStackedWidget):
     """Stacked widget that will contain/show the various central widgets
@@ -202,6 +205,7 @@ class HorizontalMainSplitter(QSplitter):
             parent=parent,
         )
         self.setChildrenCollapsible(False)
+        self._secondary_handle = None
         self._mainControls = MainControls()
         self._viewerControlStack = self._mainControls.viewerControlStack
         self.appletBar = self._mainControls.appletBar
@@ -211,24 +215,35 @@ class HorizontalMainSplitter(QSplitter):
         self._centralStack = CentralWidgetStack()
 
         self._secondaryStack = SecondaryControlsStack()
+        self._secondary_controls_hadle = None
+        self._secondaryStackSize = 0
 
-        self.insertWidget(0, self._mainControls)
-        self.insertWidget(1, self._centralStack)
-        self.insertWidget(2, self._secondaryStack)
+        self._insertWidget(0, self._mainControls)
+        self._insertWidget(1, self._centralStack)
+        self._insertWidget(2, self._secondaryStack)
 
         self._viewerControlPlaceholder = QWidget(self)
         self._centralWidgetPlaceholder = QWidget(self)
-        self._secondaryControlsPlaceholder = QWidget(self)
 
         self.setActiveViewerControls(self._viewerControlPlaceholder)
         self.setActiveCentralWidget(self._centralWidgetPlaceholder)
-        self.setActiveSecondaryControls(self._secondaryControlsPlaceholder)
+
+        self.splitterMoved.connect(self._save_secondary_size)
+        self.setCollapsible(2, True)
 
     def clearStackedWidgets(self):
         for stacked_widget in [self._viewerControlStack, self._centralStack]:
             for i in reversed(list(range(stacked_widget.count()))):
                 lastWidget = stacked_widget.widget(i)
                 stacked_widget.removeWidget(lastWidget)
+
+        self._clear_secondary_control_stack()
+
+    def _clear_secondary_control_stack(self):
+        if self._secondaryStack is not None:
+            for i in reversed(list(range(self._secondaryStack.count()))):
+                lastWidget = self._secondaryStack.widget(i)
+                self._secondaryStack.removeWidget(lastWidget)
 
     @staticmethod
     def _setActiveStackWidget(stack, widget):
@@ -250,19 +265,22 @@ class HorizontalMainSplitter(QSplitter):
 
     def setActiveSecondaryControls(self, secondaryControlsWidget: Union[QWidget, None]):
         if secondaryControlsWidget is not None:
+
+            assert self.count() == 3
+            assert self._secondaryStack is not None
+
+            if not self._secondaryStack.isVisible():
+                self._secondaryStack.setVisible(True)
+
             if self._secondaryStack.indexOf(secondaryControlsWidget) == -1:
                 self._secondaryStack.addWidget(secondaryControlsWidget)
                 if hasattr(secondaryControlsWidget, "sync_state"):
                     self.splitterMoved.connect(secondaryControlsWidget.sync_state)
             self._secondaryStack.setCurrentWidget(secondaryControlsWidget)
-        else:
-            secondaryControlsWidget = self._secondaryControlsPlaceholder
-            self._secondaryStack.setCurrentWidget(secondaryControlsWidget)
+            self._secondary_controls_hadle.setButtonText(secondaryControlsWidget.display_text)
 
-        if secondaryControlsWidget == self._secondaryControlsPlaceholder:
-            sizes = self.sizes()
-            new_sizes = [sizes[0], sizes[1] + sizes[2], 0]
-            self.setSizes(new_sizes)
+        else:
+            self._secondaryStack.setVisible(False)
 
     def setMainControlsVisible(self, visible: bool):
         self._mainControls.setVisible(visible)
@@ -274,10 +292,17 @@ class HorizontalMainSplitter(QSplitter):
         n_widgets = self.count()
 
         if n_widgets == 2:
-            w = LabeledHandle(self.orientation(), self)
-            return w
+            if self._secondary_controls_hadle is None:
+                self._secondary_controls_hadle = LabeledHandle(self.orientation(), self)
+            return self._secondary_controls_hadle
         else:
             return QSplitterHandle(self.orientation(), self)
+
+    def _save_secondary_size(self, pos, index):
+        if index != 2:
+            return
+
+        self._secondaryStackSize = self.sizes()[2]
 
     def toggle_secondary_contents(self):
         sizes = self.sizes()
@@ -290,3 +315,9 @@ class HorizontalMainSplitter(QSplitter):
             sizes = [sizes[0], sizes[1] + sizes[2], 0]
 
         self.setSizes(sizes)
+
+    def insertWidget(self, index: int, widget: QWidget) -> None:
+        raise NotImplementedError("MainSideSplitter does not expose insertWidget.")
+
+    def _insertWidget(self, index: int, widget: QWidget) -> None:
+        return super().insertWidget(index, widget)

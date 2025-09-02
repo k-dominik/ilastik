@@ -1249,7 +1249,6 @@ class IlastikShell(QMainWindow):
         self.enableWorkflow = self.projectManager is not None
         self.updateShellProjectDisplay()
         # Default to a 50-50 split
-        self.mainSplitter.setCollapsible(2, True)
         totalSplitterHeight = sum(self.mainSplitter.sizes())
         self.mainSplitter.setSizes([totalSplitterHeight // 2, totalSplitterHeight // 2])
 

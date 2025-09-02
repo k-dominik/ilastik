@@ -360,9 +360,7 @@ class LabelingGui(LayerViewerGui):
         from .labelExplorerGui import LabelExplorer
 
         if self.label_explorer_widget:
-            self.label_explorer_widget.show()
-            self.label_explorer_widget.raise_()
-            return
+            return self.label_explorer_widget
 
         tlo: OpPixelClassification = self.topLevelOperatorView
 

@@ -20,10 +20,10 @@
 ###############################################################################
 import logging
 from functools import partial
-from typing import Any, Dict, List, Tuple
+from typing import Dict, List, Tuple
 
 import vigra
-from PyQt5.QtCore import Qt, QTimer, pyqtSignal
+from PyQt5.QtCore import Qt, pyqtSignal
 from PyQt5.QtGui import QShowEvent
 from PyQt5.QtWidgets import QAbstractItemView, QStyledItemDelegate, QTableWidget, QTableWidgetItem, QVBoxLayout, QWidget
 
@@ -51,6 +51,8 @@ class LookupDelegate(QStyledItemDelegate):
 class LabelExplorer(QWidget):
     positionRequested = pyqtSignal(dict)
     closed = pyqtSignal()
+
+    display_text = "Label Explorer"
 
     def __init__(
         self, nonzero_blocks_slot: OutputSlot, label_slot: OutputSlot, block_shape_slot: OutputSlot, parent=None
@@ -187,8 +189,3 @@ class LabelExplorer(QWidget):
     def cleanup(self):
         for fn in self.unsubscribe_fns:
             fn()
-
-    def closeEvent(self, ev):
-        self.cleanup()
-        self.closed.emit()
-        super().closeEvent(ev)
