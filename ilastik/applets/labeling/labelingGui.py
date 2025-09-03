@@ -136,8 +136,12 @@ class LabelingGui(LayerViewerGui):
         def __init__(self):
             # Slot to insert elements onto
             self.labelInput = None  # labelInput.setInSlot(xxx)
+            # Slot to notify about written blocks
+            self.nonzeroLabelBlocks = None
             # Slot to read elements from
             self.labelOutput = None  # labelOutput.get(roi)
+            # Slot that describes the internal block shape of the cache
+            self.blockshape = None
             # Slot that determines which label value corresponds to erased values
             self.labelEraserValue = None  # labelEraserValue.setValue(xxx)
             # Slot that is used to request wholesale label deletion
@@ -359,14 +363,15 @@ class LabelingGui(LayerViewerGui):
     def _show_label_explorer(self):
         from .labelExplorerGui import LabelExplorer
 
+        if self._labelingSlots.nonzeroLabelBlocks is None:
+            return
+
         if self.label_explorer_widget:
             return self.label_explorer_widget
 
-        tlo: OpPixelClassification = self.topLevelOperatorView
-
-        slot = tlo.NonzeroLabelBlocks
-        slot_out = tlo.LabelImages
-        slot_block_shape = tlo.LabelCacheBlockShape
+        slot = self._labelingSlots.nonzeroLabelBlocks
+        slot_out = self._labelingSlots.labelOutput
+        slot_block_shape = self._labelingSlots.blockshape
 
         label_explorer_widget = LabelExplorer(
             nonzero_blocks_slot=slot, label_slot=slot_out, block_shape_slot=slot_block_shape, parent=self

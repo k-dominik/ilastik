@@ -72,6 +72,7 @@ class CarvingGui(LabelingGui):
         labelingSlots = LabelingGui.LabelingSlots()
         labelingSlots.labelInput = topLevelOperatorView.WriteSeeds
         labelingSlots.labelOutput = topLevelOperatorView.opLabelArray.Output
+        labelingSlots.nonzeroLabelBlocks = topLevelOperatorView.opLabelArray.NonzeroBlocks
         labelingSlots.labelEraserValue = topLevelOperatorView.opLabelArray.EraserLabelValue
         labelingSlots.labelNames = topLevelOperatorView.LabelNames
         labelingSlots.labelDelete = topLevelOperatorView.opLabelArray.DeleteLabel

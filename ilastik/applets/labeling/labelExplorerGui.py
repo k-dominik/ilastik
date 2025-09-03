@@ -68,6 +68,8 @@ class LabelExplorer(QWidget):
         self.setupUi()
         self.label_slot = label_slot
 
+        self._neighbourhood = Neighbourhood.NONE if block_shape_slot is None else Neighbourhood.SINGLE
+
         self._block_cache: Dict[Tuple[int, ...], Block] = {}
         self._shown: bool = False
 
@@ -103,11 +105,16 @@ class LabelExplorer(QWidget):
 
     def update_table(self, slot, roi, **kwargs):
         """ """
-        blockShape = self._block_shape_slot.value
-        block_starts = getIntersectingBlocks(blockshape=blockShape, roi=(roi.start, roi.stop))
-        block_rois = [(bl, bl + blockShape) for bl in block_starts]
-        block_slicings = [roiToSlice(*br) for br in block_rois]
-        self.populateTable(block_slicings)
+        if self._block_shape_slot is None:
+            self._block_cache = {}
+            non_zero_slicings: List[Tuple[slice, ...]] = self._nonzero_blocks_slot.value
+            self.populateTable(non_zero_slicings)
+        else:
+            blockShape = self._block_shape_slot.value
+            block_starts = getIntersectingBlocks(blockshape=blockShape, roi=(roi.start, roi.stop))
+            block_rois = [(bl, bl + blockShape) for bl in block_starts]
+            block_slicings = [roiToSlice(*br) for br in block_rois]
+            self.populateTable(block_slicings)
 
     def update_blocks(self, block_slicings):
         def extract_single(roi):
@@ -118,7 +125,7 @@ class LabelExplorer(QWidget):
             labels_data = labels_data.withAxes("".join(spatial_axes))
             block_regions = extract_annotations(labels_data)
             block = Block(
-                axistags="".join(self._axistags), slices=roi, regions=block_regions, neigbourhood=Neighbourhood.SINGLE
+                axistags="".join(self._axistags), slices=roi, regions=block_regions, neigbourhood=self._neighbourhood
             )
             self._block_cache[block.block_start] = block
 
@@ -141,11 +148,15 @@ class LabelExplorer(QWidget):
         for column in range(self.tableWidget.columnCount() - 1):
             self.tableWidget.resizeColumnToContents(column)
 
-    @timeLogged(logger, logging.INFO, "populateTable")
     def populateTable(self, block_slicings):
         if not self._shown:
             # No need to update the table if not shown
             return
+
+        self._populateTable(block_slicings)
+
+    @timeLogged(logger, logging.INFO, "_populateTable")
+    def _populateTable(self, block_slicings):
         self.update_blocks(block_slicings)
         self._regions_dict = connect_regions(self._block_cache)
         self.update_table_data()
@@ -177,7 +188,7 @@ class LabelExplorer(QWidget):
     def sync_state(self, _a0=None):
         """Update internal "ready" state on gui events
 
-        This widget is shown in a splitter and we want to know if the widget is  currently
+        This widget is shown in a splitter and we want to know if the widget is currently
         visible or not. If not, we don't need to do any updates.
         """
         shown_before = self._shown

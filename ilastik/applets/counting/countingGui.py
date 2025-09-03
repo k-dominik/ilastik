@@ -132,6 +132,7 @@ class CountingGui(LabelingGui):
         # Tell our base class which slots to monitor
         labelSlots = LabelingGui.LabelingSlots()
         labelSlots.labelInput = topLevelOperatorView.LabelInputs
+        labelSlots.nonzeroLabelBlocks = topLevelOperatorView.NonzeroLabelBlocks
         labelSlots.labelOutput = topLevelOperatorView.LabelImages
         labelSlots.labelEraserValue = topLevelOperatorView.opLabelPipeline.opLabelArray.eraser
         labelSlots.labelDelete = topLevelOperatorView.opLabelPipeline.opLabelArray.deleteLabel
