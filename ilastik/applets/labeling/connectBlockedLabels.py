@@ -268,7 +268,7 @@ def _is_unbound(sl: slice) -> bool:
 
 
 def extract_annotations(labels_data: vigra.VigraArray) -> Tuple[Region, ...]:
-    """
+    """Wrap connected components in a label array in Regions
 
     Args:
       labels_data: integer valued VigraArray with axistags. Note: only spatial
@@ -319,6 +319,9 @@ def extract_annotations(labels_data: vigra.VigraArray) -> Tuple[Region, ...]:
 
 
 def connect_regions(block_dict: Dict[Tuple[int, ...], Block]) -> Dict[Region, Region]:
+    """
+    Connect regions between a sparse blocking
+    """
     regions_dict: Dict[Region, Region] = {}  # region_world: region_world, updated with anchor as value
 
     def get_anchor(region):
@@ -358,6 +361,7 @@ def connect_regions(block_dict: Dict[Tuple[int, ...], Block]) -> Dict[Region, Re
 
 
 def check_overlap(region_a: Region, region_b: Region) -> bool:
+    """Check bounding box overlap"""
     assert region_a.axistags == region_b.axistags
 
     overlap = True

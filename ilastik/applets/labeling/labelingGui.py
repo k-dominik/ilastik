@@ -25,7 +25,7 @@ import os
 import re
 import logging
 from functools import partial
-from typing import Optional
+from typing import Optional, Union
 
 # Third-party
 import numpy
@@ -35,6 +35,7 @@ from qtpy.QtGui import QColor, QIcon
 from qtpy.QtWidgets import QApplication, QMessageBox, QAction
 
 # HCI
+from ilastik.applets.labeling.labelExplorerGui import LabelExplorer
 from volumina.api import LazyflowSinkSource, ColortableLayer, GrayscaleLayer
 from volumina.utility import ShortcutManager, preferences
 from ilastik.shell.gui.iconMgr import ilastikIcons
@@ -81,7 +82,7 @@ class LabelingGui(LayerViewerGui):
     def appletDrawer(self):
         return self._labelControlUi
 
-    def secondaryControlsWidget(self):
+    def secondaryControlsWidget(self) -> Union[LabelExplorer, None]:
         return self._show_label_explorer()
 
     def stopAndCleanUp(self):
@@ -361,7 +362,6 @@ class LabelingGui(LayerViewerGui):
         self.eraserSizeIndex = preferences.get("labeling", "eraser brush size", default=4)
 
     def _show_label_explorer(self):
-        from .labelExplorerGui import LabelExplorer
 
         if self._labelingSlots.nonzeroLabelBlocks is None:
             return

@@ -20,12 +20,13 @@
 ###############################################################################
 import logging
 from functools import partial
-from typing import Dict, List, Tuple
+from typing import Dict, List, Optional, Tuple
 
 import vigra
 from PyQt5.QtCore import Qt, pyqtSignal
-from PyQt5.QtGui import QShowEvent
+from PyQt5.QtGui import QPaintEvent, QShowEvent
 from PyQt5.QtWidgets import QAbstractItemView, QStyledItemDelegate, QTableWidget, QTableWidgetItem, QVBoxLayout, QWidget
+from qtpy.QtCore import QTimer
 
 from ilastik.utility.gui import silent_qobject
 from lazyflow.request.request import Request, RequestPool
@@ -49,29 +50,50 @@ class LookupDelegate(QStyledItemDelegate):
 
 
 class LabelExplorer(QWidget):
+    """
+    Widget used with `LabelingGui`: shows table of annotations from the label output slot
+
+    Clicking on an item in the table emits a `positionRequested` event.
+
+    Has 2 modes of operation:
+      * if `block_shape_slot` is provided, it's assumed to be connected to a blocked cache
+        (as in Pixel Classification and derived workflows)
+      * `block_shape_slot` is None indicates a non-blocked cache - as used in Carving and
+        Counting. In this case it is assumed that any update will require update of the
+        whole label array.
+
+    The ui is lazy. Calculations are only done if this widget is shown. If changes to the
+    label slot are detected without the ui being visible, `_table_initialized` is set to
+    False and a complete recalculation will happen the next time the widget is shown.
+    (This could be in principle optimized by keeping track of the dirty rois.)
+    """
+
     positionRequested = pyqtSignal(dict)
-    closed = pyqtSignal()
 
     display_text = "Label Explorer"
 
     def __init__(
-        self, nonzero_blocks_slot: OutputSlot, label_slot: OutputSlot, block_shape_slot: OutputSlot, parent=None
+        self,
+        nonzero_blocks_slot: OutputSlot,
+        label_slot: OutputSlot,
+        *,
+        block_shape_slot: Optional[OutputSlot] = None,
+        parent=None,
     ):
         super().__init__(parent)
+        self._table_initialized: bool = False
+        self._shown: bool = False
         self._lookup_table: dict[str, str] = {}
-        self.setWindowTitle("Label Explorer")
         self._block_shape_slot = block_shape_slot
         self._nonzero_blocks_slot = nonzero_blocks_slot
         self._axistags = label_slot.meta.getAxisKeys()
         self._display_axistags = [x for x in self._axistags if x != "c"]
         self._item_flags = Qt.ItemIsSelectable | Qt.ItemIsEnabled | Qt.ItemNeverHasChildren
-        self.setupUi()
         self.label_slot = label_slot
-
+        self._block_cache: Dict[Tuple[int, ...], Block] = {}
         self._neighbourhood = Neighbourhood.NONE if block_shape_slot is None else Neighbourhood.SINGLE
 
-        self._block_cache: Dict[Tuple[int, ...], Block] = {}
-        self._shown: bool = False
+        self._setupUi()
 
         self.unsubscribe_fns = []
         self.unsubscribe_fns.append(label_slot.notifyDirty(self.update_table))
@@ -82,14 +104,21 @@ class LabelExplorer(QWidget):
 
         self.tableWidget.currentCellChanged.connect(_sync_viewer_position)
 
+    def _clear_blocking(self):
+        self._block_cache = {}
+
     def _item_lookup(self, item):
         return self._lookup_table.get(item, "NOT FOUND")
 
-    def showEvent(self, a0: "QShowEvent") -> None:
-        super().showEvent(a0)
-        self.sync_state()
+    def paintEvent(self, a0: QPaintEvent) -> None:
+        # Hack: Initialize new widget after lane removal
+        # need to trigger initialization manually - while the widget is on the
+        # not on the screen
+        if not self._table_initialized:
+            QTimer.singleShot(0, self.sync_state)
+        super().paintEvent(a0)
 
-    def setupUi(self):
+    def _setupUi(self):
         layout = QVBoxLayout()
         self.tableWidget = QTableWidget()
         self.tableWidget.setColumnCount(len(self._display_axistags) + 1)
@@ -103,10 +132,29 @@ class LabelExplorer(QWidget):
         layout.addWidget(self.tableWidget)
         self.setLayout(layout)
 
+    def initialize_table(self):
+        """
+        Do a full recalculation of annotations from the connected label cache slot
+        """
+        if self._table_initialized:
+            return
+
+        self._clear_blocking()
+
+        non_zero_slicings: List[Tuple[slice, ...]] = self._nonzero_blocks_slot.value
+        self.populateTable(non_zero_slicings)
+        self._table_initialized = True
+        for column in range(self.tableWidget.columnCount() - 1):
+            self.tableWidget.resizeColumnToContents(column)
+
     def update_table(self, slot, roi, **kwargs):
-        """ """
+        """
+        Request updated label blocks and recalculate connected labels
+
+        as reaction to dirty notification from output slot.
+        """
         if self._block_shape_slot is None:
-            self._block_cache = {}
+            self._clear_blocking()
             non_zero_slicings: List[Tuple[slice, ...]] = self._nonzero_blocks_slot.value
             self.populateTable(non_zero_slicings)
         else:
@@ -116,7 +164,9 @@ class LabelExplorer(QWidget):
             block_slicings = [roiToSlice(*br) for br in block_rois]
             self.populateTable(block_slicings)
 
-    def update_blocks(self, block_slicings):
+    def _update_blocks(self, block_slicings):
+        """Request data from label slot and save them in `self._block_cache`"""
+
         def extract_single(roi):
             labels_data = vigra.taggedView(self.label_slot[roi].wait(), "".join(self._axistags))
 
@@ -140,28 +190,22 @@ class LabelExplorer(QWidget):
         elif len(block_slicings) == 1:
             extract_single(block_slicings[0])
 
-    def initialize_table(self):
-        if not self._shown:
-            return
-        non_zero_slicings: List[Tuple[slice, ...]] = self._nonzero_blocks_slot.value
-        self.populateTable(non_zero_slicings)
-        for column in range(self.tableWidget.columnCount() - 1):
-            self.tableWidget.resizeColumnToContents(column)
-
     def populateTable(self, block_slicings):
         if not self._shown:
             # No need to update the table if not shown
+            # but mark to redo the table again if shown
+            self._table_initialized = False
             return
 
         self._populateTable(block_slicings)
 
     @timeLogged(logger, logging.INFO, "_populateTable")
     def _populateTable(self, block_slicings):
-        self.update_blocks(block_slicings)
+        self._update_blocks(block_slicings)
         self._regions_dict = connect_regions(self._block_cache)
-        self.update_table_data()
+        self._update_table_data()
 
-    def update_table_data(self):
+    def _update_table_data(self):
         annotation_anchors: List[Tuple[Dict[str, float], int]] = []
         for k, v in self._regions_dict.items():
             if k == v:
@@ -196,6 +240,11 @@ class LabelExplorer(QWidget):
         if self._shown and not shown_before:
             self.initialize_table()
         self.tableWidget.viewport().update()
+
+    def showEvent(self, a0: QShowEvent) -> None:
+        super().showEvent(a0)
+        if not self._table_initialized:
+            self.sync_state()
 
     def cleanup(self):
         for fn in self.unsubscribe_fns:

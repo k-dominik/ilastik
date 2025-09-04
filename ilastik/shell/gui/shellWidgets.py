@@ -232,6 +232,12 @@ class HorizontalMainSplitter(QSplitter):
         self.setCollapsible(2, True)
 
     def clearStackedWidgets(self):
+        """
+        Called by workflow as a cleanup action when closing the project
+        """
+        self._secondaryStackSize = 0
+        sz = self.sizes()
+        self.setSizes([sz[0], sz[1] + sz[2], 0])
         for stacked_widget in [self._viewerControlStack, self._centralStack]:
             for i in reversed(list(range(stacked_widget.count()))):
                 lastWidget = stacked_widget.widget(i)
@@ -240,6 +246,7 @@ class HorizontalMainSplitter(QSplitter):
         self._clear_secondary_control_stack()
 
     def _clear_secondary_control_stack(self):
+
         if self._secondaryStack is not None:
             for i in reversed(list(range(self._secondaryStack.count()))):
                 lastWidget = self._secondaryStack.widget(i)
@@ -275,6 +282,7 @@ class HorizontalMainSplitter(QSplitter):
             if self._secondaryStack.indexOf(secondaryControlsWidget) == -1:
                 self._secondaryStack.addWidget(secondaryControlsWidget)
                 if hasattr(secondaryControlsWidget, "sync_state"):
+                    secondaryControlsWidget.sync_state()
                     self.splitterMoved.connect(secondaryControlsWidget.sync_state)
             self._secondaryStack.setCurrentWidget(secondaryControlsWidget)
             self._secondary_controls_hadle.setButtonText(secondaryControlsWidget.display_text)
@@ -310,11 +318,16 @@ class HorizontalMainSplitter(QSplitter):
         was_collapsed = sizes[2] == 0
 
         if was_collapsed:
-            sizes = [sizes[0], sizes[1] - 200, 200]
+            if self._secondaryStackSize == 0:
+                self._secondaryStackSize = 200
+            sizes = [sizes[0], sizes[1] - self._secondaryStackSize, self._secondaryStackSize]
         else:
             sizes = [sizes[0], sizes[1] + sizes[2], 0]
 
         self.setSizes(sizes)
+        secondaryControlsWidget = self._secondaryStack.currentWidget()
+        if hasattr(secondaryControlsWidget, "sync_state"):
+            secondaryControlsWidget.sync_state()
 
     def insertWidget(self, index: int, widget: QWidget) -> None:
         raise NotImplementedError("MainSideSplitter does not expose insertWidget.")
