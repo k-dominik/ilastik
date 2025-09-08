@@ -20,8 +20,8 @@
 ###############################################################################
 from typing import Optional, Union
 
-from qtpy.QtCore import Qt
-from qtpy.QtGui import QColor, QPalette
+from qtpy.QtCore import Qt, QSize
+from qtpy.QtGui import QColor, QMouseEvent, QPaintEvent, QPalette, QResizeEvent
 from qtpy.QtWidgets import (
     QComboBox,
     QFrame,
@@ -32,11 +32,11 @@ from qtpy.QtWidgets import (
     QSplitter,
     QSplitterHandle,
     QStackedWidget,
+    QStyle,
+    QStyleOptionButton,
+    QStylePainter,
     QVBoxLayout,
     QWidget,
-    QStylePainter,
-    QStyleOptionButton,
-    QStyle,
 )
 
 from ilastik.widgets.appletDrawerToolBox import AppletDrawerToolBox
@@ -172,7 +172,7 @@ class MainControls(QSplitter):
 class SecondaryControlsStack(QStackedWidget):
     """Stacked widget that will contain/show the secondary controls
 
-    currently LabelExplorer Widget for anything that does labeling
+    currently LabelExplorerWidget for anything that does labeling
     """
 
     def __init__(self, parent: Optional[QWidget] = None) -> None:
@@ -281,7 +281,11 @@ class HorizontalMainSplitter(QSplitter):
 
             if self._secondaryStack.indexOf(secondaryControlsWidget) == -1:
                 self._secondaryStack.addWidget(secondaryControlsWidget)
+                if hasattr(secondaryControlsWidget, "sync_state"):
+                    secondaryControlsWidget.sync_state()
+                    self.splitterMoved.connect(secondaryControlsWidget.sync_state)
             self._secondaryStack.setCurrentWidget(secondaryControlsWidget)
+            self._secondary_controls_hadle.setButtonText(secondaryControlsWidget.display_text)
 
         else:
             self._secondaryStack.setVisible(False)
