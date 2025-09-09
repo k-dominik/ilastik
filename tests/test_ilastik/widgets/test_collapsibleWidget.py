@@ -6,9 +6,8 @@ from ilastik.widgets.collapsibleWidget import CollapsibleWidget
 
 
 @pytest.fixture
-def widget(qtbot):
+def widget():
     w = QLabel("Test 42")
-    qtbot.addWidget(w)
     return w
 
 
