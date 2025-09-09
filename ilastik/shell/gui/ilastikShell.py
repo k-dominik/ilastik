@@ -608,7 +608,10 @@ class IlastikShell(QMainWindow):
     def workflow(self):
         return self.projectManager and self.projectManager.workflow
 
-    def loadWorkflow(self, workflow_class):
+    def loadWorkflow(self, workflow_class, _checked=False):
+        """
+        _checked because of subscribing this to QPushButton.clicked
+        """
         self.onNewProjectActionTriggered(workflow_class)
 
     def getWorkflow(self, w: Optional[str] = None) -> Type[Workflow]:

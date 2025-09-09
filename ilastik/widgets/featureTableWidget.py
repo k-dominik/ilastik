@@ -304,7 +304,7 @@ class ItemDelegate(QItemDelegate):
             QPoint(10, 0),
             QPoint(5, 5),
         ]
-        painter.drawConvexPolygon(*top)
+        painter.drawConvexPolygon(top)
         left = [
             QPoint(width - 10, 5),
             QPoint(width - 10, height - 5),
@@ -312,7 +312,7 @@ class ItemDelegate(QItemDelegate):
             QPoint(width - 5, 0),
             QPoint(width - 10, 5),
         ]
-        painter.drawConvexPolygon(*left)
+        painter.drawConvexPolygon(left)
         painter.setBrush(QBrush())
         painter.setFont(font)
         painter.drawRect(QRect(5, 5, width - 15, height - 10))
