@@ -18,6 +18,7 @@
 # on the ilastik web site at:
 #          http://ilastik.org/license.html
 ###############################################################################
+from contextlib import contextmanager
 import logging
 from functools import partial
 from typing import Dict, List, Tuple
@@ -220,7 +221,7 @@ class LabelExplorerWidget(QWidget):
 
         at_non_c = [x for x in self._axistags if x != "c"]
 
-        with silent_qobject(self.tableWidget):
+        with silent_qobject(self.tableWidget), self._ensure_no_sort():
 
             self.tableWidget.setRowCount(len(annotation_anchors))
             for row, (roi, label) in enumerate(annotation_anchors):
@@ -235,6 +236,14 @@ class LabelExplorerWidget(QWidget):
                 label_item = QTableWidgetItem(str(label))
                 label_item.setFlags(self._item_flags)
                 self.tableWidget.setItem(row, len(at_non_c), label_item)
+
+    @contextmanager
+    def _ensure_no_sort(self):
+        self.tableWidget.setSortingEnabled(False)
+        try:
+            yield
+        finally:
+            self.tableWidget.setSortingEnabled(True)
 
     def sync_state(self, _a0=None):
         """Update internal "ready" state on gui events
