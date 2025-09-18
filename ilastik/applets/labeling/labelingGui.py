@@ -391,6 +391,7 @@ class LabelingGui(LayerViewerGui):
         update_labels()
 
         self._labelControlUi.labelListModel.dataChanged.connect(update_labels)
+        self._labelControlUi.labelListModel.rowsRemoved.connect(update_labels)
 
         return label_explorer_widget
 
