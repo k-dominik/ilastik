@@ -29,7 +29,7 @@ from abc import abstractmethod, ABC
 from collections import OrderedDict
 from numbers import Number
 from pathlib import Path
-from typing import List, Tuple, Dict, Optional, Union, Callable, Set
+from typing import List, Literal, Tuple, Dict, Optional, Union, Callable, Set
 
 import h5py
 import numpy
@@ -49,6 +49,7 @@ from lazyflow.operators import OpMissingDataSource
 from lazyflow.operators.ioOperators import OpH5N5WriterBigDataset
 from lazyflow.operators.ioOperators import OpInputDataReader
 from lazyflow.operators.ioOperators import OpStreamingH5N5Reader
+from lazyflow.operators.ioOperators.opFileListToGridReader import FileListTableOutputSlot
 from lazyflow.operators.opArrayPiper import OpArrayPiper
 from lazyflow.operators.opReorderAxes import OpReorderAxes
 from lazyflow.utility.helpers import get_default_axisordering, eq_shapes
@@ -343,7 +344,9 @@ class DatasetInfo(ABC):
         return PathComponents(Path(path).as_posix()).extension in [".n5"]
 
     @classmethod
-    def fileHasInternalPaths(cls, path: str) -> bool:
+    def fileHasInternalPaths(cls, path: Path) -> bool:
+        if str(path).endswith("octable.h5"):
+            return False
         return cls.pathIsHdf5(path) or cls.pathIsN5(path) or cls.pathIsNpz(path)
 
     @classmethod
@@ -689,7 +692,7 @@ class FilesystemDatasetInfo(DatasetInfo):
         *,
         filePath: str,
         project_file: h5py.File = None,
-        sequence_axis: str = None,
+        sequence_axis: Optional[Literal["z", "t", "c", "grid"]] = None,
         nickname: str = "",
         drange: Tuple[Number, Number] = None,
         **info_kwargs,
@@ -736,11 +739,16 @@ class FilesystemDatasetInfo(DatasetInfo):
             FilePath=self.filePath,
             SequenceAxis=self.sequence_axis,
         )
+        self._hack_op = op_reader
         return op_reader.Output
 
     @classmethod
     def from_h5_group(cls, data: h5py.Group):
-        params = {"project_file": data.file, "filePath": data["filePath"][()].decode("utf-8")}
+        params = {
+            "project_file": data.file,
+            "filePath": data["filePath"][()].decode("utf-8"),
+            "sequence_axis": data["sequence_axis"][()].decode("utf-8"),
+        }
         return super().from_h5_group(data, params)
 
     def isHdf5(self) -> bool:
@@ -799,6 +807,12 @@ class FilesystemDatasetInfo(DatasetInfo):
             possible_internal_paths |= set(self.getPossibleInternalPathsFor(external_path))
         return possible_internal_paths
 
+    def to_json_data(self) -> Dict:
+        out = super().to_json_data()
+        if self.sequence_axis is not None:
+            out["sequence_axis"] = self.sequence_axis.encode()
+        return out
+
 
 class RelativeFilesystemDatasetInfo(FilesystemDatasetInfo):
     def __init__(self, **fs_info_kwargs):
@@ -849,7 +863,7 @@ class OpDataSelection(Operator):
     DatasetOut = OutputSlot(
         stype="object"
     )  # Connected to self.Dataset only if no dataset constraints are violated, for UI
-
+    FileListTable = FileListTableOutputSlot(stype="object")
     ImageName = OutputSlot(stype="string")  # : The name of the output image
 
     def __init__(
@@ -891,6 +905,7 @@ class OpDataSelection(Operator):
 
     def _clean_up_all_children(self, *_) -> None:
         self.Image.disconnect()
+        self.FileListTable.disconnect()
         # This relies on self.children being in the same order as the graph.
         for op in reversed(self.children):
             op.cleanUp()
@@ -899,7 +914,6 @@ class OpDataSelection(Operator):
         self._clean_up_all_children()
         self.DatasetOut.disconnect()
         datasetInfo: DatasetInfo = self.Dataset.value
-
         try:
             data_provider = datasetInfo.get_provider_slot(parent=self)
             if "x" not in data_provider.meta.axistags or "y" not in data_provider.meta.axistags:
@@ -931,7 +945,11 @@ class OpDataSelection(Operator):
                 datasetInfo.nickname = self.Image.meta.nickname
             self.ImageName.setValue(datasetInfo.nickname)
             self.DatasetOut.connect(self.Dataset)
-
+            if hasattr(datasetInfo, "_hack_op"):
+                op = datasetInfo._hack_op
+                if "FileListTable" in op.outputs:
+                    print("table connected")
+                    self.FileListTable.connect(op.FileListTable)
         except:
             self.DatasetOut.disconnect()
             self._clean_up_all_children()
@@ -992,6 +1010,7 @@ class OpDataSelectionGroup(Operator):
     AllowLabels = OutputSlot(stype="bool")  # Taken from dataset in first role (usually Raw Data)
 
     DatasetGroupOut = OutputSlot(stype="object", level=1)  # Valid Dataset information, for UI
+    FileListTable = FileListTableOutputSlot(stype="object")
 
     # Must be the LAST slot declared in this class.
     # When the shell detects that this slot has been resized,
@@ -1042,6 +1061,7 @@ class OpDataSelectionGroup(Operator):
             # Clean up the old operators
             self.ImageGroup.disconnect()
             self.Image.disconnect()
+            self.FileListTable.disconnect()
             if self._opDatasets is not None:
                 self._opDatasets.cleanUp()
 
@@ -1070,13 +1090,16 @@ class OpDataSelectionGroup(Operator):
             self.Image.connect(self._opDatasets.Image[0])
             self.ImageName.connect(self._opDatasets.ImageName[0])
             self.AllowLabels.connect(self._opDatasets.AllowLabels[0])
+            self.FileListTable.connect(self._opDatasets.FileListTable[0])
         else:
             self.Image.disconnect()
             self.ImageName.disconnect()
+            self.FileListTable.disconnect()
             self.AllowLabels.disconnect()
             self.Image.meta.NOTREADY = True
             self.ImageName.meta.NOTREADY = True
             self.AllowLabels.meta.NOTREADY = True
+            self.FileListTable.meta.NOTREADY = True
 
     def execute(self, slot, subindex, rroi, result):
         assert False, "Unknown or unconnected output slot: {}".format(slot.name)
