@@ -18,9 +18,12 @@
 # on the ilastik web site at:
 #          http://ilastik.org/license.html
 ###############################################################################
-from typing import List, Literal, OrderedDict, Tuple
+from typing import List, Literal, NewType, OrderedDict, Tuple
 
 Axiskey = Literal["t", "z", "y", "x", "c"]
 SPATIAL_AXES: List[Axiskey] = ["z", "y", "x"]
 Shape = Tuple[int, ...]
 TaggedShape = OrderedDict[Axiskey, int]  # { axis: size }
+
+
+ItemId = NewType("ItemId", int)
