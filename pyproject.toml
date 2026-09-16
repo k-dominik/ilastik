@@ -16,6 +16,12 @@ vigra_objfeats = "ilastik.plugins_default.vigra_objfeats:VigraObjFeats"
 vigra_objfeats_convex_hull = "ilastik.plugins_default.vigra_objfeats_convex_hull:VigraConvexHullObjFeats"
 vigra_objfeats_convex_hull3D = "ilastik.plugins_default.vigra_objfeats_convex_hull3D:VigraConvexHullObjFeats3D"
 vigra_objfeats_skeleton = "ilastik.plugins_default.vigra_objfeats_skeleton:VigraSkeletonObjFeats"
+dino_objfeats_dinov2_small = "ilastik.plugins_default.dino_objfeats:DinoV2Small"
+dino_objfeats_dinov2_base = "ilastik.plugins_default.dino_objfeats:DinoV2Base"
+dino_objfeats_dinov2_large = "ilastik.plugins_default.dino_objfeats:DinoV2Large"
+dino_objfeats_dinov2_small_reg = "ilastik.plugins_default.dino_objfeats:DinoV2SmallReg"
+dino_objfeats_dinov2_base_reg = "ilastik.plugins_default.dino_objfeats:DinoV2BaseReg"
+dino_objfeats_dinov2_large_reg = "ilastik.plugins_default.dino_objfeats:DinoV2LargeReg"
 
 [project.entry-points."ilastik.tracking_export_plugins.default"]
 tracking_contour_export = "ilastik.plugins_default.tracking_contour_export:TrackingContourExportFormatPlugin"
