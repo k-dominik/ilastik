@@ -20,6 +20,8 @@
 ###############################################################################
 import logging
 
+from ilastik.utility import log_exception
+
 logger = logging.getLogger(__name__)
 
 import ilastik.config
@@ -41,11 +43,20 @@ try:
     )
 except ImportError as e:
     logger.warning("Failed to import object workflow; check dependencies: " + str(e))
+    log_exception(logger, e)
+
+
+try:
+    from .objectClassification.objectClassificationFromCollectionWorkflow import OcFromCollection
+except ImportError as e:
+    logger.warning("Failed to import collections workflow")
+    log_exception(logger, e)
 
 try:
     from .tracking.manual.manualTrackingWorkflow import ManualTrackingWorkflow
 except (ImportError, AttributeError) as e:
     logger.warning("Failed to import tracking workflow; check pgmlink dependency: " + str(e))
+    log_exception(logger, e)
 
 try:
     from .tracking.conservation.conservationTrackingWorkflow import (
@@ -61,6 +72,7 @@ except ImportError as e:
         "Failed to import automatic tracking workflow (conservation tracking). For this workflow, see the installation"
         "instructions on our website ilastik.org; check dependencies: " + str(e)
     )
+    log_exception(logger, e)
 
 try:
     from .tracking.structured.structuredTrackingWorkflow import (
@@ -72,10 +84,12 @@ except ImportError as e:
         "Failed to import structured learning tracking workflow. For this workflow, see the installation"
         "instructions on our website ilastik.org; check dependencies: " + str(e)
     )
+    log_exception(logger, e)
 try:
     from .carving.carvingWorkflow import CarvingWorkflow
 except ImportError as e:
     logger.warning("Failed to import carving workflow; check vigra dependency: " + str(e))
+    log_exception(logger, e)
 
 try:
     from .edgeTrainingWithMulticut import EdgeTrainingWithMulticutWorkflow

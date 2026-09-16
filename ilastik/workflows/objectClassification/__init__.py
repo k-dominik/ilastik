@@ -30,3 +30,5 @@ from .objectClassificationWorkflow import (
     ObjectClassificationWorkflowBinary,
     ObjectClassificationWorkflowPrediction,
 )
+
+from .objectClassificationFromCollectionWorkflow import OcFromCollection as OcFromCollection
