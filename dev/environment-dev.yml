@@ -56,6 +56,7 @@ dependencies:
   - pytorch 2.10.*
   - torchvision>=0.21
   - tiktorch 26.5.0
+  - umap-learn
 
   # TODO: investigate pytorch-3dunet dependency changes 1.9.3 and up #3079
   - pytorch-3dunet 1.9.2
