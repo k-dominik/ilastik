@@ -1,12 +1,3 @@
-from builtins import next
-
-from builtins import range
-from builtins import object
-import sys
-
-if sys.version_info.major >= 3:
-    unicode = str
-
 ###############################################################################
 #   lazyflow: data flow based lazy parallel computation framework
 #
@@ -29,6 +20,9 @@ if sys.version_info.major >= 3:
 # 		   http://ilastik.org/license/
 ###############################################################################
 # Python
+from typing import Any, Generic
+from typing_extensions import TypeVar
+
 import logging
 import itertools
 from functools import partial, wraps
@@ -38,6 +32,7 @@ import time
 
 # SciPy
 import numpy
+import numpy.typing
 
 import vigra
 
@@ -47,7 +42,7 @@ from lazyflow.roi import TinyVector
 from lazyflow.request import Request
 from lazyflow.stype import ArrayLike, Opaque
 from lazyflow.metaDict import MetaDict
-from lazyflow.utility import slicingtools, OrderedSignal
+from lazyflow.utility import OrderedSignal
 
 module_logger = logging.getLogger(__name__)
 
@@ -76,7 +71,10 @@ def is_setup_fn(func):
     return call_in_setup_context
 
 
-class Slot(object):
+_T = TypeVar("_T", default=numpy.typing.NDArray[Any])
+
+
+class Slot(Generic[_T]):
     """
     Base class for InputSlot, OutputSlot
     """
@@ -151,12 +149,12 @@ class Slot(object):
         )
 
         # Check for simple mistakes in parameter order...
-        assert isinstance(name, (str, unicode))
+        assert isinstance(name, str)
         assert isinstance(optional, bool)
 
         if not hasattr(self, "_type"):
             self._type = None
-        if isinstance(stype, (str, unicode)):
+        if isinstance(stype, str):
             stype = ArrayLike
         self.downstream_slots = []
         self.name = name
@@ -469,19 +467,19 @@ class Slot(object):
         self.meta._ready = False  # Higher-level slots don't track or use self._ready, but just in case.
         self._sig_unready(self)
 
-    def setOrConnect(self, value_or_slot):
+    def setOrConnect(self, value_or_slot: "Slot[_T]" | _T):
         if isinstance(value_or_slot, Slot):
             self.connect(value_or_slot)
         else:
             self.setValue(value_or_slot)
 
-    def setOrConnectIfAvailable(self, value_or_slot):
+    def setOrConnectIfAvailable(self, value_or_slot: "Slot[_T]" | _T | None):
         if value_or_slot is None:
             return
         self.setOrConnect(value_or_slot)
 
     @is_setup_fn
-    def connect(self, upstream_slot, notify=True, permit_distant_connection=False):
+    def connect(self, upstream_slot: "Slot[_T]", notify=True, permit_distant_connection=False):
         """
         Connect a slot to another slot
 
@@ -1011,7 +1009,9 @@ class Slot(object):
         assert not isinstance(value, Slot), "Can't use setitem to connect slots.  Use connect()"
         assert self.level == 0, "setitem can only be used with slots of level 0. Did you forget to append a key?"
         assert self.operator is not None, "cannot do __setitem__ on Slot '{}' -> no operator !!"
-        assert slicingtools.is_bounded(key), "Can't use Slot.__setitem__ with keys that include : or ..."
+        assert self.rtype.validate(
+            key
+        ), f"Can't use Slot.__setitem__ with keys that include : or ... {self.rtype=} {key=}"
         # If we do not support masked arrays, ensure that we are not being passed one.
         assert self.allow_mask or not (self.meta.has_mask or isinstance(value, numpy.ma.masked_array)), (
             'The operator, "%s", is being setup to receive a masked array as input to slot, "%s".'
@@ -1042,7 +1042,7 @@ class Slot(object):
         return len(self._subSlots)
 
     @property
-    def value(self):
+    def value(self) -> _T:
         """This method directly returns the full content of a slot.
 
         Is mainly used when region of interest specification make no
@@ -1075,7 +1075,7 @@ class Slot(object):
             return temp
 
     @is_setup_fn
-    def setValue(self, value, notify=True, check_changed=True, extra_meta={}):
+    def setValue(self, value: _T, notify=True, check_changed=True, extra_meta={}):
         """This method can be used to directly assign a value to an
         InputSlot.
 
@@ -1278,7 +1278,7 @@ class Slot(object):
         """
         return self._optional or self.ready()
 
-    def ready(self):
+    def ready(self) -> bool:
         if self.level == 0:
             # If this slot is non-multi, then just check our own
             # status
@@ -1495,7 +1495,7 @@ class Slot(object):
         return f"{realOpName}.{self.name} [{mslot_info_str}]: \t{self.meta}"
 
 
-class InputSlot(Slot):
+class InputSlot(Slot[_T]):
     """The base class for input slots, it provides methods to connect
     the InputSlot to an OutputSlot of another operator (i.e.
     .connect(partner) call) or allows to directly provide a value as
@@ -1511,7 +1511,7 @@ class InputSlot(Slot):
 
 
 @contextmanager
-def valueContext(slot, value):
+def valueContext(slot: Slot[_T], value: _T):
     """Temporarily change value in the *with* statement context, yielding an old one."""
     old = slot.value
     slot.setValue(value)
@@ -1521,7 +1521,7 @@ def valueContext(slot, value):
         slot.setValue(old)
 
 
-class OutputSlot(Slot):
+class OutputSlot(Slot[_T]):
     """The base class for output slots, it provides methods to connect
     the OutputSlot to an InputSlot of another operator (i.e.
     .connect(partner) call).
