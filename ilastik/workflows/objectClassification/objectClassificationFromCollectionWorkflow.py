@@ -26,6 +26,7 @@ from ilastik.applets.dataSelection.dataSelectionApplet import DataSelectionApple
 from ilastik.applets.objectClassificationCollection.objectClassficationCollectionApplet import (
     ObjectClassificationCollectionApplet,
 )
+from ilastik.applets.objectClassificationCollection.opObjectClassificationCollection import OpOCC
 from ilastik.applets.objectFeatureCollection.objectFeaturesCollectionApplet import ObjectFeatureCollectionApplet
 from ilastik.applets.objectFeatureCollection.opObjectFearturesCollection import OpObjectFeaturesCollection
 from ilastik.utility.slot_name_enum import SlotNameEnum
@@ -66,8 +67,12 @@ class OcFromCollection(Workflow):
             workflow=self, projectFileGroupName="ObjectFeatureCollection"
         )
 
+        self.objectClassificationApplet = ObjectClassificationCollectionApplet(
+            workflow=self, projectFileGroupName="ObjectClassificationCollection"
+        )
         self._applets.append(self.dataSelectionApplet)
         self._applets.append(self.objectFeatureCollectionApplet)
+        self._applets.append(self.objectClassificationApplet)
 
     def createDataSelectionApplet(self):
         data_instructions = "Load a folder of objects in separate images using the 'Raw Data' tab shown on the right."
@@ -91,5 +96,9 @@ class OcFromCollection(Workflow):
         # Get a handle to each operator
         opData = self.dataSelectionApplet.topLevelOperator.getLane(laneIndex)
         opFeatures: OpObjectFeaturesCollection = self.objectFeatureCollectionApplet.topLevelOperator.getLane(laneIndex)
+        opClassify: OpOCC = self.objectClassificationApplet.topLevelOperator.getLane(laneIndex)
         # # assert opData.Table.ready()
         opFeatures.FileList.connect(opData.FileListTable)
+
+        opClassify.FileList.connect(opData.FileListTable)
+        opClassify.Embedding.connect(opFeatures.Embedding)
