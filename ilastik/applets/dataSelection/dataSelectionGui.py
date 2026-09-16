@@ -18,19 +18,21 @@
 # on the ilastik web site at:
 # 		   http://ilastik.org/license.html
 ###############################################################################
+from enum import IntEnum
 import itertools
 import logging
 import os
 import threading
 from functools import partial
 from pathlib import Path
-from typing import Dict, List, Set, Union, Optional
+from typing import TYPE_CHECKING, Dict, List, Set, Union, Optional
 
 import h5py
 from qtpy import uic
 from qtpy.QtWidgets import QCheckBox, QDialog, QMessageBox, QStackedWidget, QWidget, QApplication
 from qtpy.QtCore import Qt
 from vigra import AxisTags
+
 from volumina.utility import preferences
 
 from ilastik.applets.base.applet import DatasetConstraintError
@@ -54,10 +56,15 @@ from .opDataSelection import (
 )
 from .multiscaleDatasetBrowser import MultiscaleDatasetBrowser
 
+if TYPE_CHECKING:
+    from ilastik.applets.dataSelection.dataSelectionApplet import DataSelectionApplet
+    from ilastik.applets.dataSelection.dataSelectionSerializer import DataSelectionSerializer
+    from .opDataSelection import OpMultiLaneDataSelectionGroup
+
 logger = logging.getLogger(__name__)
 
 
-class LocationOptions(object):
+class LocationOptions(IntEnum):
     """Enum for location menu options"""
 
     Project = 0
@@ -65,7 +72,7 @@ class LocationOptions(object):
     RelativePath = 2
 
 
-class GuiMode(object):
+class GuiMode(IntEnum):
     Normal = 0
     Batch = 1
 
@@ -145,13 +152,13 @@ class DataSelectionGui(QWidget):
 
     def __init__(
         self,
-        parentApplet,
-        dataSelectionOperator,
-        serializer,
-        instructionText,
-        guiMode=GuiMode.Normal,
-        max_lanes=None,
-        show_axis_details=False,
+        parentApplet: "DataSelectionApplet",
+        dataSelectionOperator: "OpMultiLaneDataSelectionGroup",
+        serializer: "DataSelectionSerializer",
+        instructionText: str,
+        guiMode: GuiMode = GuiMode.Normal,
+        max_lanes: Optional[int] = None,
+        show_axis_details: bool = False,
     ):
         """
         Constructor.
@@ -704,7 +711,9 @@ class DataSelectionGui(QWidget):
         # also, check prefer_2d, size/volume and presence of 'z' to determine this
         url = os.path.pathsep.join(stackDlg.selectedFiles)
         stack_info = self.instantiate_dataset_info(url=url, role=roleIndex, sequence_axis=stackDlg.sequence_axis)
-
+        if stackDlg.sequence_axis == "grid":
+            self.addLanes([stack_info], roleIndex, laneIndex)
+            return
         try:
             # FIXME: do this inside a Request
             self.parentApplet.busy = True
