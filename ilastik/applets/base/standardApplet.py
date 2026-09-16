@@ -18,9 +18,14 @@
 # on the ilastik web site at:
 # 		   http://ilastik.org/license.html
 ###############################################################################
+from typing import TYPE_CHECKING, Type
+
 from ilastik.utility import MultiLaneOperatorABC, OpMultiLaneWrapper
 from ilastik.applets.base.applet import Applet
 from ilastik.applets.base.singleToMultiGuiAdapter import SingleToMultiGuiAdapter
+
+if TYPE_CHECKING:
+    from lazyflow.operator import Operator
 
 
 class StandardApplet(Applet):
@@ -60,7 +65,7 @@ class StandardApplet(Applet):
     #   - Override singleLaneOpeartorClass AND broadcastingSlots (easier; uses default topLevelOperator implementation)
 
     @property
-    def singleLaneOperatorClass(self):
+    def singleLaneOperatorClass(self) -> Type["Operator"]:
         """
         Return the operator class which handles a single image.
         Single-lane applets should override this property.
@@ -73,7 +78,7 @@ class StandardApplet(Applet):
         return ((), {})  # args, kwargs
 
     @property
-    def broadcastingSlots(self):
+    def broadcastingSlots(self) -> list[str]:
         """
         Slots that should be connected to all image lanes are referred to as "broadcasting" slots.
         Single-lane applets should override this property to return a list of the broadcasting slots' names.

@@ -28,13 +28,14 @@ import sys
 from abc import ABCMeta
 from contextlib import contextmanager
 from traceback import walk_tb, FrameSummary, format_list
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Optional
 
 # lazyflow
 from lazyflow.slot import InputSlot, OutputSlot, Slot
 from lazyflow.utility import exception_chain
 
 if TYPE_CHECKING:
+    from lazyflow.graph import Graph
     from lazyflow.rtype import Roi
 
 
@@ -201,7 +202,7 @@ class Operator(metaclass=OperatorMetaClass):
         obj.outputs = OutputDict(obj)
         return obj
 
-    def __init__(self, parent=None, graph=None, write_logs=False):
+    def __init__(self, parent: Optional["Operator"] = None, graph: Optional["Graph"] = None, write_logs: bool = False):
         """
         Either parent or graph have to be given. If both are given
         parent.graph has to be identical with graph.
