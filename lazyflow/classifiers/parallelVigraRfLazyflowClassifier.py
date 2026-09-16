@@ -113,8 +113,8 @@ class ParallelVigraRfLazyflowClassifierFactory(LazyflowVectorwiseClassifierFacto
         if y.ndim == 1:
             y = y[:, numpy.newaxis]
 
-        assert X.ndim == 2
-        assert len(X) == len(y)
+        assert X.ndim == 2, f"{X.ndim=}"
+        assert len(X) == len(y), f"{len(X)=} {len(y)=}"
 
         # Sample X and y
         if self._label_proportion:

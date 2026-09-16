@@ -98,12 +98,26 @@ class Roi(with_metaclass(RoiMeta, object)):
                 return cls._fromString(s[len(cls.__name__) + 1 :])
         assert False, "Class name within '{}' does not refer to any Roi subclasses.".format(s)
 
+    @classmethod
+    def validate(cls, pslice):
+        return slicingtools.is_bounded(pslice)
+
 
 class Everything(Roi):
     """Fallback Roi for Slots that can't operate on subsets of their input data."""
 
     def __init__(self, slot, *args, **kwargs):
         self.slot = slot
+
+
+class Index(Roi):
+    def __init__(self, slot, pslice):
+        self.slot = slot
+        self._pslice = pslice
+
+    @classmethod
+    def validate(cls, pslice):
+        return isinstance(pslice, int)
 
 
 class List(Roi):

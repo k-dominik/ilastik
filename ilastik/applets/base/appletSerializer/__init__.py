@@ -31,3 +31,5 @@ from .slotSerializer import SerialObjectFeatureNamesSlot as SerialObjectFeatureN
 from .slotSerializer import SerialPickleableSlot as SerialPickleableSlot
 from .slotSerializer import SerialSlot as SerialSlot
 from .slotSerializer import SerialRelabeledDataSlot as SerialRelabeledDataSlot
+from .slotSerializer import SerialDataclassSlot as SerialDataclassSlot
+from .slotSerializer import SerialDataclassDictSlot as SerialDataclassDictSlot
