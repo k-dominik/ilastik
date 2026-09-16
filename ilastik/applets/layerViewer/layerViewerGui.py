@@ -23,8 +23,7 @@ from enum import IntEnum
 import os
 from functools import partial
 import logging
-from typing import Union
-from future.utils import with_metaclass
+from typing import TYPE_CHECKING, Generic, TypeVar, Union
 
 logger = logging.getLogger(__name__)
 
@@ -65,6 +64,10 @@ from ilastik.utility.gui import ThreadRouter, threadRouted
 from ilastik.config import cfg as ilastik_config
 from ilastik.widgets.viewerControls import ViewerControls
 
+if TYPE_CHECKING:
+    from lazyflow.operator import Operator
+    from lazyflow.slot import Slot
+
 # ===----------------------------------------------------------------------------------------------------------------===
 
 
@@ -98,7 +101,10 @@ class LayerViewerGuiMetaclass(type(QWidget)):
         return instance
 
 
-class LayerViewerGui(with_metaclass(LayerViewerGuiMetaclass, QWidget)):
+_T = TypeVar("_T", bound="Operator")
+
+
+class LayerViewerGui(QWidget, Generic[_T], metaclass=LayerViewerGuiMetaclass):
     """
     Implements an applet GUI whose central widget is a VolumeEditor
     and whose layer controls simply contains a layer list widget.
@@ -149,11 +155,11 @@ class LayerViewerGui(with_metaclass(LayerViewerGuiMetaclass, QWidget)):
     def __init__(
         self,
         parentApplet,
-        topLevelOperatorView,
-        additionalMonitoredSlots=[],
-        centralWidgetOnly=False,
-        crosshair=True,
-        is_3d_widget_visible=False,
+        topLevelOperatorView: _T,
+        additionalMonitoredSlots: list["Slot"] = [],
+        centralWidgetOnly: bool = False,
+        crosshair: bool = True,
+        is_3d_widget_visible: bool = False,
     ):
         """
         Constructor.  **All** slots of the provided *topLevelOperatorView* will be monitored for changes.

@@ -24,7 +24,7 @@ import os
 import re
 import logging
 from functools import partial
-from typing import Optional, Union
+from typing import TYPE_CHECKING, Generic, Optional, TypeVar, Union
 
 # Third-party
 import numpy
@@ -41,7 +41,6 @@ from ilastik.shell.gui.iconMgr import ilastikIcons
 from ilastik.widgets.labelListView import Label
 from ilastik.widgets.labelListModel import LabelListModel
 from volumina import colortables
-from lazyflow.slot import InputSlot, OutputSlot
 
 # ilastik
 from ilastik.utility import bind, log_exception
@@ -49,6 +48,11 @@ from ilastik.utility.gui import ThunkEventHandler, is_qt_dark_mode, threadRouted
 from ilastik.applets.layerViewer.layerViewerGui import LayerViewerGui, LayerPriority
 
 from ilastik.applets.labeling.labelingImport import import_labeling_layer
+
+if TYPE_CHECKING:
+    from lazyflow.operator import Operator
+    from lazyflow.slot import InputSlot, OutputSlot
+
 
 # Loggers
 logger = logging.getLogger(__name__)
@@ -74,20 +78,23 @@ class LabelingSlots:
     """
 
     # Slot to insert elements onto
-    labelInput: InputSlot
+    labelInput: "InputSlot"
     # Slot to read elements from
-    labelOutput: OutputSlot
+    labelOutput: "OutputSlot"
     # Slot that determines which label value corresponds to erased values
-    labelEraserValue: InputSlot
+    labelEraserValue: "InputSlot"
     # Slot that is used to request wholesale label deletion
-    labelDelete: InputSlot
+    labelDelete: "InputSlot"
     # Slot that gives a list of label names
-    labelNames: OutputSlot
+    labelNames: "OutputSlot"
     # Slot to notify about written blocks
-    nonzeroLabelBlocks: Optional[OutputSlot] = None
+    nonzeroLabelBlocks: Optional["OutputSlot"] = None
 
 
-class LabelingGui(LayerViewerGui):
+_T = TypeVar("_T", bound="Operator")
+
+
+class LabelingGui(LayerViewerGui[_T]):
     """
     Provides all the functionality of a simple layerviewer
     applet with the added functionality of labeling.
@@ -152,9 +159,9 @@ class LabelingGui(LayerViewerGui):
         self,
         parentApplet,
         labelingSlots: LabelingSlots,
-        topLevelOperatorView,
+        topLevelOperatorView: _T,
         drawerUiPath: Optional[str] = None,
-        rawInputSlot: Optional[InputSlot] = None,
+        rawInputSlot: Optional["InputSlot"] = None,
         crosshair=True,
         is_3d_widget_visible=False,
     ):
@@ -195,7 +202,7 @@ class LabelingGui(LayerViewerGui):
         self._initLabelUic(drawerUiPath)
 
         # Init base class
-        super(LabelingGui, self).__init__(
+        super().__init__(
             parentApplet,
             topLevelOperatorView,
             [labelingSlots.labelInput, labelingSlots.labelOutput],
