@@ -20,7 +20,7 @@
 ###############################################################################
 import argparse
 import logging
-from typing import List, Dict, Optional, Union, Sequence
+from typing import List, Dict, Literal, Optional, Union, Sequence
 import itertools
 from pathlib import Path
 import tempfile
@@ -239,7 +239,10 @@ class DataSelectionApplet(Applet):
         return role_name.lower().replace(" ", "_").replace("-", "_")
 
     def create_dataset_info(
-        self, url: Union[Path, str], axistags: Optional[vigra.AxisTags] = None, sequence_axis: str = "z"
+        self,
+        url: Union[Path, str],
+        axistags: Optional[vigra.AxisTags] = None,
+        sequence_axis: Literal["z", "t", "c", "grid"] = "z",
     ) -> DatasetInfo:
         url = str(url)
         if isUrl(url):

@@ -20,12 +20,16 @@
 # 		   http://ilastik.org/license/
 ###############################################################################
 
+import numbers
+import sys
 from functools import reduce
 from operator import mul
-from typing import Iterable, Tuple, Type, Union, Dict
-import sys
-import numbers
+from threading import RLock
+from typing import Dict, Iterable, Tuple, Type, Union
+
 import numpy
+
+from lazyflow.base import ItemId
 
 
 def itersubclasses(cls, _seen=None):
@@ -172,3 +176,20 @@ def eq_shapes(test: Dict[str, int], ref: Dict[str, int]) -> bool:
     common_match = all(test[a] == ref[a] for a in common_axes if a != "c")
     extra_are_singleton = all(test.get(a, 1) == 1 and ref.get(a, 1) == 1 for a in extra_axes if a != "c")
     return common_match and extra_are_singleton
+
+
+class TrueInc:
+
+    def __init__(self, init_count: int = 0):
+        self._count = init_count
+        self._lock = RLock()
+
+    def inc(self) -> ItemId:
+        with self._lock:
+            self._count += 1
+            return ItemId(self._count)
+
+    def ensure_ceil(self, item_id: ItemId):
+        with self._lock:
+            if self._count < item_id:
+                self._count = item_id
