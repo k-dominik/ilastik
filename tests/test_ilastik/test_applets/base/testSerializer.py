@@ -1,7 +1,7 @@
 ###############################################################################
 #   ilastik: interactive learning and segmentation toolkit
 #
-#       Copyright (C) 2011-2024, the ilastik developers
+#       Copyright (C) 2011-2026, the ilastik developers
 #                                <team@ilastik.org>
 #
 # This program is free software; you can redistribute it and/or
@@ -27,6 +27,8 @@ from copy import deepcopy
 from unittest import mock
 
 import h5py
+from lazyflow.base import ItemId
+from lazyflow.operators.ioOperators.types import RowBase
 import numpy
 import pytest
 from sklearn.discriminant_analysis import LinearDiscriminantAnalysis, QuadraticDiscriminantAnalysis
@@ -47,8 +49,13 @@ from ilastik.applets.base.appletSerializer import (
     SerialSlot,
     SerialRelabeledDataSlot,
     jsonSerializerRegistry,
+    SerialDataclassSlot,
 )
-from ilastik.applets.base.appletSerializer.slotSerializer import SerialClassifierFactorySlot
+from ilastik.applets.base.appletSerializer.slotSerializer import (
+    SerialClassifierFactorySlot,
+    SerialDataclassDictSlot,
+    SerialDataclassSlot,
+)
 from lazyflow.classifiers.parallelVigraRfLazyflowClassifier import ParallelVigraRfLazyflowClassifierFactory
 from lazyflow.classifiers.sklearnLazyflowClassifier import SklearnLazyflowClassifierFactory
 from lazyflow.classifiers.vigraRfLazyflowClassifier import VigraRfLazyflowClassifierFactory
@@ -58,6 +65,8 @@ from lazyflow.operators.opRelabelConsecutive import OpRelabelConsecutive
 from lazyflow.rtype import List
 from lazyflow.slot import OutputSlot
 from lazyflow.stype import Opaque
+from pydantic import ConfigDict
+from pydantic.dataclasses import dataclass
 
 
 class OpMock(Operator):
@@ -87,6 +96,162 @@ class OpMockSerializer(AppletSerializer):
 
 def randArray():
     return numpy.random.randn(10, 10)
+
+
+class TestDataclassSerializer:
+    @dataclass(config=ConfigDict(arbitrary_types_allowed=True))
+    class A(RowBase):
+        x: str
+        y: int
+        z: float
+        w: numpy.ndarray
+
+    class Op(Operator):
+        Input = InputSlot["TestDataclassSerializer.A"](stype="object")
+        Output = OutputSlot["TestDataclassSerializer.A"]()
+
+        def execute(self, slot, subindex, roi, result):
+            val = self.Input.value
+            result[...] = val
+            return [val]
+
+        def setupOutputs(self):
+            self.Output.meta.assignFrom(self.Input.meta)
+
+        def propagateDirty(self, slot, subindex, roi):
+            pass
+
+    @pytest.fixture
+    def instance_1(self) -> "A":
+        return self.A(id=ItemId(5), x="test", y=42, z=13.4, w=numpy.arange(100, dtype="uint8"))
+
+    @pytest.fixture
+    def value_op(self, graph, instance_1: "A") -> "Op":
+        op = self.Op(graph=graph)
+        op.Input.setValue(instance_1)
+        return op
+
+    def test_dataclass_write(self, empty_in_memory_project_file: h5py.File, instance_1: "A", value_op: "Op"):
+        serializer = SerialDataclassSlot(value_op.Output, self.A, name="test")
+        serializer.serialize(empty_in_memory_project_file)
+
+        assert "test" in empty_in_memory_project_file
+        test_group = empty_in_memory_project_file["test"]
+        assert test_group["x"].attrs["__deserialize_type__"] == "str"
+        assert test_group["x"][()].decode() == instance_1.x
+        assert test_group["y"][()] == instance_1.y
+        assert test_group["y"].attrs["__deserialize_type__"] == "int"
+        assert test_group["z"][()] == instance_1.z
+        assert test_group["z"].attrs["__deserialize_type__"] == "float"
+        numpy.testing.assert_array_equal(test_group["w"][()], instance_1.w)
+        assert test_group["w"].attrs["__deserialize_type__"] == "ndarray"
+
+    def test_dataclass_read(self, empty_in_memory_project_file: h5py.File, instance_1: "A", graph):
+        op = self.Op(graph=graph)
+        serializer = SerialDataclassSlot(op.Output, self.A, inslot=op.Input, name="test")
+
+        g = empty_in_memory_project_file.create_group("test")
+        ds = g.create_dataset("id", data=5)
+        ds.attrs["__deserialize_type__"] = "int"
+        ds = g.create_dataset("x", data=b"test")
+        ds.attrs["__deserialize_type__"] = "str"
+        ds = g.create_dataset("y", data=42)
+        ds.attrs["__deserialize_type__"] = "int"
+        ds = g.create_dataset("z", data=13.4)
+        ds.attrs["__deserialize_type__"] = "float"
+        ds = g.create_dataset("w", data=numpy.arange(100, dtype="uint8"))
+        ds.attrs["__deserialize_type__"] = "ndarray"
+        ds.attrs["__deserialize_dtype__"] = "uint8"
+
+        assert not op.Output.ready()
+        serializer.deserialize(empty_in_memory_project_file)
+
+        assert op.Output.ready()
+        deserialized = op.Output.value
+        assert deserialized.x == instance_1.x
+        assert deserialized.y == instance_1.y
+        assert deserialized.z == instance_1.z
+        numpy.testing.assert_array_equal(deserialized.w, instance_1.w)
+
+
+class TestDataclassDictSerializer:
+    @dataclass(config=ConfigDict(arbitrary_types_allowed=True))
+    class A(RowBase):
+        x: str
+        y: int
+        z: float
+        w: numpy.ndarray
+
+    class Op(Operator):
+        Input = InputSlot["TestDataclassSerializer.A"](stype="object")
+        Output = OutputSlot["TestDataclassSerializer.A"]()
+
+        def execute(self, slot, subindex, roi, result):
+            val = self.Input.value
+            result[...] = val
+            return [val]
+
+        def setupOutputs(self):
+            self.Output.meta.assignFrom(self.Input.meta)
+
+        def propagateDirty(self, slot, subindex, roi):
+            pass
+
+    @pytest.fixture
+    def data_dict(self) -> dict[ItemId, "A"]:
+        return {ItemId(5): self.A(id=ItemId(5), x="test", y=42, z=13.4, w=numpy.arange(100, dtype="uint8"))}
+
+    @pytest.fixture
+    def value_op(self, graph, data_dict: "A") -> "Op":
+        op = self.Op(graph=graph)
+        op.Input.setValue(data_dict)
+        return op
+
+    def test_dataclass_write(
+        self, empty_in_memory_project_file: h5py.File, data_dict: dict[ItemId, "A"], value_op: "Op"
+    ):
+        serializer = SerialDataclassDictSlot(value_op.Output, self.A, name="test")
+        serializer.serialize(empty_in_memory_project_file)
+
+        assert "test" in empty_in_memory_project_file
+        test_group = empty_in_memory_project_file["test"]
+        assert "5" in test_group
+        assert test_group["5/x"].attrs["__deserialize_type__"] == "str"
+        assert test_group["5/x"][()].decode() == data_dict[ItemId(5)].x
+        assert test_group["5/y"][()] == data_dict[ItemId(5)].y
+        assert test_group["5/y"].attrs["__deserialize_type__"] == "int"
+        assert test_group["5/z"][()] == data_dict[ItemId(5)].z
+        assert test_group["5/z"].attrs["__deserialize_type__"] == "float"
+        numpy.testing.assert_array_equal(test_group["5/w"][()], data_dict[ItemId(5)].w)
+        assert test_group["5/w"].attrs["__deserialize_type__"] == "ndarray"
+
+    def test_dataclass_read(self, empty_in_memory_project_file: h5py.File, data_dict: "A", graph):
+        op = self.Op(graph=graph)
+        serializer = SerialDataclassDictSlot(op.Output, self.A, inslot=op.Input, name="test")
+
+        g = empty_in_memory_project_file.create_group("test/5")
+        ds = g.create_dataset("id", data=5)
+        ds.attrs["__deserialize_type__"] = "int"
+        ds = g.create_dataset("x", data=b"test")
+        ds.attrs["__deserialize_type__"] = "str"
+        ds = g.create_dataset("y", data=42)
+        ds.attrs["__deserialize_type__"] = "int"
+        ds = g.create_dataset("z", data=13.4)
+        ds.attrs["__deserialize_type__"] = "float"
+        ds = g.create_dataset("w", data=numpy.arange(100, dtype="uint8"))
+        ds.attrs["__deserialize_type__"] = "ndarray"
+        ds.attrs["__deserialize_dtype__"] = "uint8"
+
+        assert not op.Output.ready()
+        serializer.deserialize(empty_in_memory_project_file)
+
+        assert op.Output.ready()
+        deserialized = op.Output.value
+        assert isinstance(deserialized, dict)
+        assert deserialized[ItemId(5)].x == data_dict[ItemId(5)].x
+        assert deserialized[ItemId(5)].y == data_dict[ItemId(5)].y
+        assert deserialized[ItemId(5)].z == data_dict[ItemId(5)].z
+        numpy.testing.assert_array_equal(deserialized[ItemId(5)].w, data_dict[ItemId(5)].w)
 
 
 class TestSerializer(unittest.TestCase):

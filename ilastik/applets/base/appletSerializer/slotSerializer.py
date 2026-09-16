@@ -25,40 +25,101 @@ import pickle
 import re
 import tempfile
 import warnings
-from typing import Any, List, Optional, Tuple
+from dataclasses import fields
+from typing import TYPE_CHECKING, Any, Generic, List, Optional, Tuple, Type, TypeVar
 
 import h5py
 import numpy
+import numpy as np
 
 from ilastik import Project
 from ilastik.utility.maybe import maybe
+from lazyflow.base import ItemId
+from lazyflow.operators.ioOperators.types import RowBase
 from lazyflow.operators.valueProviders import OpValueCache
 from lazyflow.roi import roiToSlice, sliceToRoi
 from lazyflow.slot import InputSlot, OutputSlot, Slot
 from lazyflow.utility import timeLogged
 
 from . import jsonSerializerRegistry
-from .legacyClassifiers import (
-    deserialize_classifier_type,
-    deserialize_classifier_factory,
-)
-from .serializerUtils import (
-    deleteIfPresent,
-    slicingToString,
-    stringToSlicing,
-)
+from .legacyClassifiers import deserialize_classifier_factory, deserialize_classifier_type
+from .serializerUtils import deleteIfPresent, slicingToString, stringToSlicing
 
+if TYPE_CHECKING:
+    from ilastik.applets.objectClassificationCollection.opObjectClassificationCollection import OpGridLabels
 
 logger = logging.getLogger(__name__)
 
 
-class SerialSlot:
+_T = TypeVar("_T")
+_PT = TypeVar("_PT", bound=RowBase)
+
+
+def ensure_encoded(val: str | bytes) -> bytes:
+    if isinstance(val, str):
+        val = val.encode("utf-8")
+
+    return val
+
+
+def encode_value(group, name, value):
+    if isinstance(value, str):
+        ds = group.create_dataset(name=name, data=ensure_encoded(value))
+        ds.attrs["__deserialize_type__"] = "str"
+    elif isinstance(value, int):
+        ds = group.create_dataset(name=name, data=value)
+        ds.attrs["__deserialize_type__"] = "int"
+    elif isinstance(value, float):
+        ds = group.create_dataset(name=name, data=value)
+        ds.attrs["__deserialize_type__"] = "float"
+    elif isinstance(value, np.ndarray):
+        ds = group.create_dataset(name=name, data=value, dtype=value.dtype)
+        ds.attrs["__deserialize_type__"] = "ndarray"
+        ds.attrs["__deserialize_dtype__"] = f"{value.dtype}"
+    else:
+        raise NotImplementedError(f"No serialization for {type(value)=} implemented.")
+
+
+def decode_value(group, name):
+    ds = group[name]
+    deserialize_type = ds.attrs["__deserialize_type__"]
+
+    if name == "id":
+        return ItemId(ds[()])
+
+    if deserialize_type == "str":
+        return ds[()].decode("utf-8")
+
+    if deserialize_type == "int":
+        return int(ds[()])
+    if deserialize_type == "float":
+        return float(ds[()])
+
+    if deserialize_type == "ndarray":
+        return ds[()].astype(ds.attrs["__deserialize_dtype__"])
+
+
+def dataclass_to_h5(basegroup, dataclass_obj):
+    for field in fields(dataclass_obj):
+        encode_value(
+            basegroup,
+            field.name,
+            getattr(dataclass_obj, field.name),
+        )
+
+
+def dataclass_from_h5(dataclass_cls, basegroup):
+    dc = {field.name: decode_value(basegroup, field.name) for field in fields(dataclass_cls)}
+    return dataclass_cls(**dc)
+
+
+class SerialSlot(Generic[_T]):
     """Implements the logic for serializing a slot."""
 
     def __init__(
         self,
-        slot: Slot,
-        inslot: Optional[Slot] = None,
+        slot: Slot[_T],
+        inslot: Optional[Slot[_T]] = None,
         name: Optional[str] = None,
         subname: Optional[str] = None,
         default: Any = None,
@@ -167,7 +228,7 @@ class SerialSlot:
         self.dirty = False
 
     @staticmethod
-    def _saveValue(group: h5py.Group, name: str, value):
+    def _saveValue(group: h5py.Group, name: str, value: _T):
         """Separate so that subclasses can override, if necessary.
 
         For instance, SerialListSlot needs to save an extra attribute
@@ -179,7 +240,7 @@ class SerialSlot:
             value = value.encode("utf-8")
         group.create_dataset(name, data=value)
 
-    def _serialize(self, group: h5py.Group, name: str, slot):
+    def _serialize(self, group: h5py.Group, name: str, slot: Slot[_T]):
         """
         :param group: The parent group.
         :type group: h5py.Group
@@ -218,14 +279,14 @@ class SerialSlot:
         self.dirty = False
 
     @staticmethod
-    def _getValue(subgroup: h5py.Group, slot: Slot):
+    def _getValue(subgroup: h5py.Group, slot: Slot[_T]):
         val = subgroup[()]
         if isinstance(val, bytes):
             # h5py can't store unicode, so we store all strings as encoded utf-8 bytes
             val = val.decode("utf-8")
         slot.setValue(val)
 
-    def _deserialize(self, subgroup: h5py.Group, slot: Slot):
+    def _deserialize(self, subgroup: h5py.Group, slot: Slot[_T]):
         """
         :param subgroup: *not* the parent group. This slot's group.
         :type subgroup: h5py.Group
@@ -266,7 +327,159 @@ class SerialSlot:
 #######################################################
 
 
-class SerialListSlot(SerialSlot):
+class SerialDataclassSlot(SerialSlot[_PT]):
+    def __init__(
+        self,
+        slot: Slot,
+        dataclass_type: Type[_PT],
+        inslot: Optional[Slot[_T]] = None,
+        name: Optional[str] = None,
+        subname: Optional[str] = None,
+        default: Any = None,
+        depends: Optional[List[Slot]] = None,
+        selfdepends: bool = True,
+    ):
+        super().__init__(
+            slot=slot,
+            inslot=inslot,
+            name=name,
+            subname=subname,
+            default=default,
+            depends=depends,
+            selfdepends=selfdepends,
+        )
+        self._cls = dataclass_type
+
+    @staticmethod
+    def _saveValue(group: h5py.Group, name: str, value: _PT):
+        """Separate so that subclasses can override, if necessary.
+
+        For instance, SerialListSlot needs to save an extra attribute
+        if the value is an empty list.
+
+        """
+        g = group.create_group(name)
+        dataclass_to_h5(g, value)
+
+    def _getValue(self, subgroup: h5py.Group, slot: Slot[_PT]):
+        slot.setValue(dataclass_from_h5(self._cls, subgroup))
+
+
+class SerialDataclassDictSlot(SerialSlot[dict[ItemId, _PT]]):
+    def __init__(
+        self,
+        slot: Slot[dict[ItemId, _PT]],
+        dataclass_type: Type[_PT],
+        cache: OpValueCache,
+        inslot: Optional[Slot[dict[ItemId, _PT]]] = None,
+        name: Optional[str] = None,
+        subname: Optional[str] = None,
+        default: Any = None,
+        depends: Optional[List[Slot]] = None,
+        selfdepends: bool = True,
+    ):
+        super().__init__(
+            slot=slot,
+            inslot=inslot,
+            name=name,
+            subname=subname,
+            default=default,
+            depends=depends,
+            selfdepends=selfdepends,
+        )
+        self._cls = dataclass_type
+        self._cache = cache
+        self._bind(cache.Input)
+
+    def _serialize(self, group: h5py.Group, name: str, slot: Slot[_T]):
+        if self._cache._dirty:
+            return
+        return super()._serialize(group, name, slot)
+
+    @staticmethod
+    def _saveValue(group: h5py.Group, name: str, value: dict[ItemId, _PT]):
+        """Separate so that subclasses can override, if necessary.
+
+        For instance, SerialListSlot needs to save an extra attribute
+        if the value is an empty list.
+
+        """
+        g = group.create_group(name)
+        for item_id, ds_instance in value.items():
+            id_group = g.create_group(f"{item_id}")
+            dataclass_to_h5(id_group, ds_instance)
+
+    def _getValue(self, subgroup: h5py.Group, slot: Slot[dict[ItemId, _PT]]):
+        print(f"SerialDataclassDictSlot._getValue {slot=} {subgroup.name=}")
+        out: dict[ItemId, _PT] = {}
+        for k in subgroup.keys():
+            assert isinstance(k, str)
+            id = ItemId(int(k))
+            out[id] = dataclass_from_h5(self._cls, subgroup[k])
+
+        slot[()] = out
+
+    def deserialize(self, group):
+        """ensure dirty is false"""
+        super().deserialize(group)
+        self.dirty = False
+
+
+class SerialLabelTableSlot(SerialSlot[dict[ItemId, _PT]]):
+    def __init__(
+        self,
+        slot: Slot[dict[ItemId, _PT]],
+        dataclass_type: Type[_PT],
+        cache: "OpGridLabels",
+        inslot: Optional[Slot[dict[ItemId, _PT]]] = None,
+        name: Optional[str] = None,
+        subname: Optional[str] = None,
+        default: Any = None,
+        depends: Optional[List[Slot]] = None,
+        selfdepends: bool = True,
+    ):
+        super().__init__(
+            slot=slot,
+            inslot=inslot,
+            name=name,
+            subname=subname,
+            default=default,
+            depends=depends,
+            selfdepends=selfdepends,
+        )
+        self._cls = dataclass_type
+        self._cache = cache
+
+    @staticmethod
+    def _saveValue(group: h5py.Group, name: str, value: dict[ItemId, _PT]):
+        """Separate so that subclasses can override, if necessary.
+
+        For instance, SerialListSlot needs to save an extra attribute
+        if the value is an empty list.
+
+        """
+        g = group.create_group(name)
+        for item_id, ds_instance in value.items():
+            id_group = g.create_group(f"{item_id}")
+            dataclass_to_h5(id_group, ds_instance)
+
+    def _getValue(self, subgroup: h5py.Group, slot: Slot[dict[ItemId, _PT]]):
+        print(f"SerialDataclassDictSlot._getValue {slot=} {subgroup.name=}")
+        out: dict[ItemId, _PT] = {}
+        for k in subgroup.keys():
+            assert isinstance(k, str)
+            id = ItemId(int(k))
+            out[id] = dataclass_from_h5(self._cls, subgroup[k])
+
+        slot[()] = out
+
+    def deserialize(self, group):
+        """ensure dirty is false"""
+        super().deserialize(group)
+        self.dirty = False
+
+
+class SerialListSlot(SerialSlot[_T]):
     """As the name implies: used for serializing a list.
 
     The only differences from the base class are:
@@ -351,7 +564,7 @@ class SerialListSlot(SerialSlot):
         self.dirty = False
 
 
-class SerialBlockSlot(SerialSlot):
+class SerialBlockSlot(SerialSlot[_T]):
     """A slot which only saves nonzero blocks."""
 
     def __init__(
@@ -568,7 +781,7 @@ class SerialBlockSlot(SerialSlot):
                 self.inslot[index][slicing] = blockArray
 
 
-class SerialClassifierSlot(SerialSlot):
+class SerialClassifierSlot(SerialSlot[_T]):
     """For saving a classifier.  Here we assume the classifier is stored in the ."""
 
     def __init__(self, slot, cache: OpValueCache, inslot=None, name=None, default=None, depends=None, selfdepends=True):
@@ -635,7 +848,7 @@ class SerialClassifierSlot(SerialSlot):
         self.cache.forceValue(classifier)
 
 
-class SerialCountingSlot(SerialSlot):
+class SerialCountingSlot(SerialSlot[_T]):
     """For saving a random forest classifier."""
 
     def __init__(self, slot, cache: OpValueCache, inslot=None, name=None, default=None, depends=None, selfdepends=True):
@@ -721,7 +934,7 @@ class SerialCountingSlot(SerialSlot):
         self.cache.forceValue(numpy.array(forests))
 
 
-class SerialDictSlot(SerialSlot):
+class SerialDictSlot(SerialSlot[_T]):
     """For saving a dictionary."""
 
     def __init__(
@@ -778,7 +991,7 @@ class SerialDictSlot(SerialSlot):
             warnings.warn("setValue() failed. message: {}".format(e.message))
 
 
-class SerialObjectFeatureNamesSlot(SerialDictSlot):
+class SerialObjectFeatureNamesSlot(SerialDictSlot[_T]):
     """Backwards compatible serializer for DictSlot containing feature names"""
 
     def _getValue(self, subgroup, slot):
@@ -792,7 +1005,7 @@ class SerialObjectFeatureNamesSlot(SerialDictSlot):
         return super()._getValue(subgroup, slot)
 
 
-class SerialClassifierFactorySlot(SerialSlot):
+class SerialClassifierFactorySlot(SerialSlot[_T]):
     def __init__(self, slot, name=None):
         super(SerialClassifierFactorySlot, self).__init__(slot, name=name)
         self._failed_to_deserialize = False
@@ -827,7 +1040,7 @@ class SerialClassifierFactorySlot(SerialSlot):
         slot.setValue(value)
 
 
-class SerialPickleableSlot(SerialSlot):
+class SerialPickleableSlot(SerialSlot[_T]):
     def __init__(self, slot, version, default=None, name=None):
         super(SerialPickleableSlot, self).__init__(slot, name=name)
         self._failed_to_deserialize = False
@@ -881,7 +1094,7 @@ class SerialPickleableSlot(SerialSlot):
             slot.setValue(value)
 
 
-class JSONSerialSlot(SerialSlot):
+class JSONSerialSlot(SerialSlot[_T]):
     """
     Implements the logic for serializing a json serializable object slot.
     """
@@ -916,7 +1129,7 @@ class JSONSerialSlot(SerialSlot):
         self.dirty = False
 
 
-class SerialRelabeledDataSlot(SerialSlot):
+class SerialRelabeledDataSlot(SerialSlot[_T]):
     """
     Implements serialization for `OpRelabelConsecutive`, that produces
     two synchronized cached values: A relabeled image, and a relabel dictionary
