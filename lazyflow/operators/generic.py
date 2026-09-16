@@ -35,7 +35,7 @@ from lazyflow import roi
 from lazyflow.roi import roiToSlice, sliceToRoi, TinyVector, getIntersection, InvalidRoiException
 from lazyflow.request import RequestPool
 
-from typing import Tuple
+from typing import Generic, Tuple, TypeVar
 
 
 # Utility functions
@@ -766,14 +766,17 @@ class OpConvertDtype(Operator):
             assert False, "Unknown slot: {}".format(slot.name)
 
 
-class OpSelectSubslot(Operator):
+_T = TypeVar("_T")
+
+
+class OpSelectSubslot(Operator, Generic[_T]):
     """
     Select the Nth subslot from a multi-slot
     """
 
-    SubslotIndex = InputSlot()
-    Inputs = InputSlot(level=1, optional=True)
-    Output = OutputSlot()
+    SubslotIndex = InputSlot[int](stype="object")
+    Inputs = InputSlot[_T](level=1, optional=True)
+    Output = OutputSlot[_T]()
 
     def setupOutputs(self):
         index = self.SubslotIndex.value
