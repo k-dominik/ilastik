@@ -22,6 +22,7 @@ import os
 import sys
 import glob
 from functools import partial
+from typing import Optional
 
 from qtpy import uic
 from qtpy.QtCore import Qt, QEvent
@@ -51,11 +52,11 @@ class StackFileSelectionWidget(QDialog):
         def __init__(self, message):
             super(StackFileSelectionWidget.DetermineStackError, self).__init__(message)
 
-    def __init__(self, parent, files=None):
+    def __init__(self, parent, files: Optional[list[str]] = None):
         super(StackFileSelectionWidget, self).__init__(parent)
 
         self._initUi()
-
+        self.selectedFiles: list[str] = []
         if files is None:
             files = []
         self._updateFileList(files)
@@ -98,6 +99,8 @@ class StackFileSelectionWidget(QDialog):
             return "t"
         elif self.stackAcrossZButton.isChecked():
             return "z"
+        elif self.interpreteAsGrid.isChecked():
+            return "grid"
         return "c"
 
     def _configureGui(self, mode):
@@ -387,7 +390,7 @@ class StackFileSelectionWidget(QDialog):
             pass
         self._updateFileList(filenames)
 
-    def _updateFileList(self, files):
+    def _updateFileList(self, files: list[str]):
         self.selectedFiles = files
 
         self.fileListWidget.clear()

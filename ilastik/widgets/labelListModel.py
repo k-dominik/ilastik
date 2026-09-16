@@ -20,10 +20,14 @@ from __future__ import absolute_import
 # on the ilastik web site at:
 # 		   http://ilastik.org/license.html
 ###############################################################################
-from builtins import range
+from typing import Optional, TYPE_CHECKING
+
 from qtpy.QtGui import QColor, QPixmap, QIcon, QImage
 from qtpy.QtCore import Qt, Signal, QItemSelectionModel
 from .listModel import ListModel, ListElement, _NPIXELS
+
+if TYPE_CHECKING:
+    from qtpy.QtWidgets import QWidget
 
 
 import logging
@@ -36,7 +40,7 @@ class Label(ListElement):
     colorChanged = Signal(QColor)
     pmapColorChanged = Signal(QColor)
 
-    def __init__(self, name, color, parent=None, pmapColor=None):
+    def __init__(self, name: str, color: QColor, parent: Optional["QWidget"] = None, pmapColor=None):
         ListElement.__init__(self, name, parent)
         self._brushColor = color
         if pmapColor is None:

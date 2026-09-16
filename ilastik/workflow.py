@@ -28,6 +28,7 @@ from typing import List, Tuple, Type, TYPE_CHECKING, Iterator, Optional, Union
 
 if TYPE_CHECKING:
     from qtpy.QtWidgets import QMenu
+    from ilastik.applets.base.applet import Applet
 
 
 logger = logging.getLogger(__name__)
@@ -43,14 +44,16 @@ class Workflow(Operator):
     #: Should workflow added to start widget
     show_in_startup_menu = True
 
-    @abstractproperty
-    def applets(self):
+    @property
+    @abstractmethod
+    def applets(self) -> list["Applet"]:
         """
         Abstract property. Return the list of applets that are owned by this workflow.
         """
         return []
 
-    @abstractproperty
+    @property
+    @abstractmethod
     def imageNameListSlot(self):
         """
         Abstract property.  Return the "image name list" slot, which lists the names of
