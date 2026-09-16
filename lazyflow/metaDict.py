@@ -1,5 +1,3 @@
-from builtins import zip
-
 ###############################################################################
 #   lazyflow: data flow based lazy parallel computation framework
 #
@@ -23,11 +21,15 @@ from builtins import zip
 ###############################################################################
 # Python
 import copy
-from typing import Dict, List
+from typing import TYPE_CHECKING, Dict, List
 import warnings
 
 from collections import OrderedDict, defaultdict
 from ndstructs import Shape5D
+
+if TYPE_CHECKING:
+    import vigra
+    import numpy.typing as npt
 
 
 class MetaDict(defaultdict):
@@ -35,6 +37,10 @@ class MetaDict(defaultdict):
     Helper class that manages the dirty state of the meta data of a slot.
     changing a meta dicts attributes sets it _dirty flag True.
     """
+
+    axistags: "vigra.AxisTags | None"
+    shape: tuple[int, ...] | None
+    dtype: "npt.DTypeLike"
 
     def __init__(self, other=None, *args, **kwargs):
         if other is None:
