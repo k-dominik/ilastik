@@ -23,6 +23,7 @@ from pathlib import Path
 
 from lazyflow.graph import Operator, InputSlot, OutputSlot
 from lazyflow.operators import OpBlockedArrayCache, OpMetadataInjector, OpSubRegion
+from lazyflow.operators.ioOperators.opFileListToGridReader import FileListTableOutputSlot, OpFileListToGridReader
 from .opNpyFileReader import OpNpyFileReader
 from lazyflow.operators.ioOperators import (
     OpBlockwiseFilesetReader,
@@ -125,6 +126,7 @@ class OpInputDataReader(Operator):
     SubVolumeRoi = InputSlot(optional=True)  # (start, stop)
 
     Output = OutputSlot()
+    FileListTable = FileListTableOutputSlot(stype="object")
 
     loggingName = __name__ + ".OpInputDataReader"
     logger = logging.getLogger(loggingName)
@@ -147,7 +149,6 @@ class OpInputDataReader(Operator):
         self.internalOutput = None
         self.opInjector = None
         self._file = None
-
         self.WorkingDirectory.setOrConnectIfAvailable(WorkingDirectory)
         self.FilePath.setOrConnectIfAvailable(FilePath)
         self.SequenceAxis.setOrConnectIfAvailable(SequenceAxis)
@@ -194,6 +195,7 @@ class OpInputDataReader(Operator):
             self.internalCleanup()
 
         openFuncs = [
+            self._attemptOpenAsGrid,
             self._attemptOpenAsKlb,
             self._attemptOpenAsUfmf,
             self._attemptOpenAsMmf,
@@ -236,6 +238,11 @@ class OpInputDataReader(Operator):
         self.opInjector = OpMetadataInjector(parent=self)
         self.opInjector.Input.connect(self.internalOutput)
 
+        for op in self.internalOperators:
+            if "FileListTable" in op.outputs:
+                self.FileListTable.connect(op.FileListTable)
+                break
+
         # Add metadata for estimated RAM usage if the internal operator didn't already provide it.
         if self.internalOutput.meta.ram_usage_per_requested_pixel is None:
             ram_per_pixel = self.internalOutput.meta.dtype().nbytes
@@ -248,6 +255,14 @@ class OpInputDataReader(Operator):
 
         # Directly connect our own output to the internal output
         self.Output.connect(self.opInjector.Output)
+
+    def _attemptOpenAsGrid(self, filepath):
+        if self.SequenceAxis.ready() and self.SequenceAxis.value == "grid":
+            opReader = OpFileListToGridReader(parent=self)
+            opReader.FileList.setValue(filepath)
+            return [opReader], opReader.Output
+
+        return ([], None)
 
     def _attemptOpenAsKlb(self, filePath):
         if not os.path.splitext(filePath)[1].lower() == ".klb":

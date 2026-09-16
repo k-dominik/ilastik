@@ -55,6 +55,10 @@ class OpImageReader(Operator):
     Filename = InputSlot(stype="filestring")
     Image = OutputSlot()
 
+    def __init__(self, graph=None, parent=None, Filename=None):
+        super().__init__(graph=graph, parent=parent)
+        self.Filename.setOrConnectIfAvailable(Filename)
+
     def setupOutputs(self):
         filename = self.Filename.value
 
