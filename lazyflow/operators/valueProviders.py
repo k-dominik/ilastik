@@ -26,6 +26,7 @@ import threading
 
 from builtins import object
 import sys
+from typing import Generic, Optional, TypeVar
 
 if sys.version_info.major >= 3:
     unicode = str
@@ -35,8 +36,11 @@ import numpy
 
 # lazyflow
 from lazyflow.request import Request
-from lazyflow.graph import Operator, InputSlot, OutputSlot
+from lazyflow.graph import Graph, Operator, InputSlot, OutputSlot
 from lazyflow.operators.opCache import ObservableCache
+from lazyflow.slot import Slot
+
+_T = TypeVar("_T")
 
 
 class ListToMultiOperator(Operator):
@@ -205,7 +209,7 @@ class OpOutputProvider(Operator):
         result[...] = self._data[key]
 
 
-class OpValueCache(Operator, ObservableCache):
+class OpValueCache(Operator, ObservableCache, Generic[_T]):
     """
     This operator caches a value in its entirety,
     and allows for the value to be "forced in" from an external user.
@@ -215,16 +219,23 @@ class OpValueCache(Operator, ObservableCache):
     name = "OpValueCache"
     category = "Cache"
 
-    Input = InputSlot()
+    Input = InputSlot[_T]()
     fixAtCurrent = InputSlot(value=False)
-    Output = OutputSlot()
+    Output = OutputSlot[_T]()
 
     loggerName = __name__ + ".OpValueCache"
     logger = logging.getLogger(loggerName)
     traceLogger = logging.getLogger("TRACE." + loggerName)
 
-    def __init__(self, *args, **kwargs):
-        super(OpValueCache, self).__init__(*args, **kwargs)
+    def __init__(
+        self,
+        parent: Optional[Operator] = None,
+        graph: Optional[Graph] = None,
+        Input: Optional[Slot[_T]] = None,
+        *args,
+        **kwargs,
+    ):
+        super(OpValueCache, self).__init__(parent=parent, graph=graph, *args, **kwargs)
         self._dirty = True
         self._value = None
         self._lock = threading.Lock()
@@ -237,6 +248,7 @@ class OpValueCache(Operator, ObservableCache):
             self._dirty = True
 
         self.Input.notifyUnready(handle_unready)
+        self.Input.setOrConnectIfAvailable(Input)
 
     def usedMemory(self):
         if isinstance(self._value, numpy.ndarray):
