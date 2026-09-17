@@ -31,7 +31,7 @@ import torch
 import vigra
 from torchvision.transforms import CenterCrop, Compose, InterpolationMode, Normalize, Resize
 
-from ilastik.applets.objectClassificationCollection.types import EmbeddingVector
+from ilastik.applets.objectFeatureCollection.types import EmbeddingVector
 from ilastik.config import runtime_cfg
 from ilastik.plugins import ObjectFeaturesPlugin
 from ilastik.plugins.types import FeatureDescription, FloatArray, PartialFeatureDict, PluginInfo

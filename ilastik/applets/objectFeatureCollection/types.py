@@ -30,43 +30,23 @@ from lazyflow.operators.ioOperators.types import RowBase
 
 
 @dataclass(config=ConfigDict(arbitrary_types_allowed=True))
-class LabelRow(RowBase):
-    label: int
+class EmbeddingVector(RowBase):
+    embedding_vector: npt.NDArray[np.floating]
 
 
-@dataclass
-class AdaptionParameters:
-    n_unlabeled: int
-    labeled_fraction: float
-
-
-@dataclass
-class UmapRow(RowBase):
-    x: float
-    y: float
-
-
-def dump_umap_table(table: "UmapTable") -> dict[str, Any]:
+def dump_embedding_table(table: "EmbeddingTable") -> dict[str, Any]:
     ids = np.array([x.id for x in table.values()], dtype="uint64")
-    umap = np.array([[row.x, row.y] for row in table.values()])
-    return dict(indices=ids, umap=umap)
+    embeddings = np.stack([x.embedding_vector for x in table.values()], axis=0)
+    return dict(indices=ids, embeddings=embeddings)
 
 
-def restore_umap_table(data_dict: dict[Literal["indices", "umap"], Any]) -> "UmapTable":
-    return {ItemId(id): UmapRow(id=id, x=row[0], y=row[1]) for id, row in zip(data_dict["indices"], data_dict["umap"])}
+def restore_table(data_dict: dict[Literal["indices", "embeddings"], Any]) -> "EmbeddingTable":
+    return {
+        ItemId(id): EmbeddingVector(id=id, embedding_vector=embedding)
+        for id, embedding in zip(data_dict["indices"], data_dict["embeddings"])
+    }
 
 
-UmapTable = Annotated[dict[ItemId, UmapRow], PlainSerializer(dump_umap_table), BeforeValidator(restore_umap_table)]
-
-
-def dump_label_table(table: "LabelTable") -> dict[str, Any]:
-    ids = np.array([x.id for x in table.values()], dtype="uint64")
-    labels = np.array([row.label for row in table.values()], dtype="uint8")
-    return dict(indices=ids, labels=labels)
-
-
-def restore_label_table(data_dict: dict[Literal["indices", "labels"], Any]) -> "LabelTable":
-    return {ItemId(id): LabelRow(id=id, label=label) for id, label in zip(data_dict["indices"], data_dict["labels"])}
-
-
-LabelTable = Annotated[dict[ItemId, LabelRow], PlainSerializer(dump_label_table), BeforeValidator(restore_label_table)]
+EmbeddingTable = Annotated[
+    dict[ItemId, EmbeddingVector], PlainSerializer(dump_embedding_table), BeforeValidator(restore_table)
+]

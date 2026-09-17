@@ -10,6 +10,8 @@ Todos:
 - [ ] typing: 1. rename FileList to FileTable. Then also have a "bare" FileTable
       class without counter and the likes - this is only needed in dataselection.
 - [ ] pipe through the embedding backbone from feature computation
+- [ ] check if there are enough images for the selected efforts
+- [ ]
 
 Done:
 - [x] ui: live update button and state tracking
@@ -67,6 +69,7 @@ from threading import Lock
 from typing import TYPE_CHECKING, Any, Callable, Iterable, Optional, TypeVar, cast
 import warnings
 
+from ilastik.applets.objectFeatureCollection.types import EmbeddingTable, EmbeddingVector
 from lazyflow.operators.generic import OpSelectSubslot
 import numpy as np
 import numpy.typing as npt
@@ -76,7 +79,6 @@ import vigra
 from pydantic.dataclasses import dataclass
 from qtpy.QtGui import QColor
 from sklearn.preprocessing import StandardScaler
-import torchvision.transforms as T
 
 from ilastik.applets.fileCollection.fileCollectionOps import OpGrid, OpGridView
 from ilastik.applets.objectClassification.opObjectClassification import InvalidObjectIndex
@@ -84,7 +86,6 @@ from ilastik.applets.objectClassificationCollection.adaptembedding import DinoV2
 from ilastik.config import runtime_cfg
 from lazyflow import USER_LOGLEVEL
 from lazyflow.base import ItemId
-from lazyflow.cancel_token import CancellationTokenSource
 from lazyflow.classifiers.parallelVigraRfLazyflowClassifier import (
     ParallelVigraRfLazyflowClassifier,
     ParallelVigraRfLazyflowClassifierFactory,
@@ -100,7 +101,7 @@ from lazyflow.stype import Opaque
 from lazyflow.utility.grid import _OUTPUT_AXIS_KEYS, ImageGrid
 from lazyflow.utility.orderedSignal import OrderedSignal
 
-from .types import EmbeddingVector, LabelRow
+from .types import LabelRow, UmapTable, UmapRow
 
 if TYPE_CHECKING:
     from lazyflow.graph import Graph
@@ -113,7 +114,6 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
-EmbeddingTable = dict[ItemId, EmbeddingVector]
 
 user_log = partial(logger.log, USER_LOGLEVEL)
 
@@ -135,12 +135,14 @@ class EmbeddingSource(IntEnum):
 
 
 class OpGridLabels(Operator):
-    LabelInput = InputSlot(optional=True, rtype=Index, stype=Opaque)
+    Input = InputSlot(optional=True, rtype=Index, stype=Opaque)
     LabelTable = OutputSlot["LabelTableT"](stype="object")
 
     def __init__(self, graph: Optional["Graph"] = None, parent: Optional[Operator] = None):
         super().__init__(graph=graph, parent=parent)
         self._lock = Lock()
+        # this is only to adhere to the cache interface for serialization
+        self._dirty = False
         # label table has object_id as index
         self._label_table: "LabelTableT" = {}
 
@@ -151,7 +153,7 @@ class OpGridLabels(Operator):
         self.LabelTable.meta.dtype = object
 
     def propagateDirty(self, slot, subindex, roi):
-        assert slot in [self.LabelInput]
+        assert slot in [self.Input]
         self.LabelTable.setDirty()
 
     def execute(self, slot, subindex, roi, result):
@@ -159,7 +161,7 @@ class OpGridLabels(Operator):
         return [self._label_table]
 
     def _setInSlot(self, slot: InputSlot, subindex: int, roi: "Index", value: Any):
-        assert slot == self.LabelInput
+        assert slot == self.Input
         image_id = ItemId(roi._pslice)
         assert self._label_table is not None
         self._label_table[image_id] = LabelRow(id=image_id, label=value)
@@ -230,7 +232,7 @@ class OpGridLabelImage(Operator):
 
 class OpEmbeddingAdapt(Operator):
     FileList = InputSlot["FileListT"](stype="object")
-    LabelInput = InputSlot["LabelTableT"](stype="object")
+    Input = InputSlot["LabelTableT"](stype="object")
     ModelId = InputSlot[str](value="dinov2_vits14_reg")
     AdaptionParameters = InputSlot["AdaptionParametersT"](stype="object")
 
@@ -241,12 +243,12 @@ class OpEmbeddingAdapt(Operator):
         parent: Optional[Operator] = None,
         graph: Optional["Graph"] = None,
         FileList: Optional[Slot["FileListT"]] = None,
-        LabelInput: Optional[Slot["LabelTableT"]] = None,
+        Input: Optional[Slot["LabelTableT"]] = None,
         AdaptionParameters: Optional[Slot["AdaptionParametersT"]] = None,
     ):
         super().__init__(parent=parent, graph=graph)
         self.FileList.setOrConnectIfAvailable(FileList)
-        self.LabelInput.setOrConnectIfAvailable(LabelInput)
+        self.Input.setOrConnectIfAvailable(Input)
         self.AdaptionParameters.setOrConnectIfAvailable(AdaptionParameters)
         self.progress_signal = OrderedSignal()
         self.cancellation_token: CancellationToken | None = None
@@ -272,7 +274,7 @@ class OpEmbeddingAdapt(Operator):
         # Adapt the features
         print("Adapting features ...")
         items = self.FileList.value
-        labels = self.LabelInput.value
+        labels = self.Input.value
         subselected_items = self._prepare_items(items, labels, adaption_parameters.n_unlabeled)
         num_classes = max(label.label for label in labels.values())
         history = adapt_features(
@@ -293,7 +295,7 @@ class OpEmbeddingAdapt(Operator):
         return [projector]
 
     def _prepare_items(self, items: "FileListT", labels: "LabelTableT", n_unlabeled: int) -> "FileListT":
-        unlabeled = [k for k in items if k not in labels]
+        unlabeled = [k for k in items if k not in labels or labels[k].label == 0]
         if len(unlabeled) < n_unlabeled:
             raise ValueError(
                 f"Number of unlabeled objects {len(unlabeled)=} is smaller than requested number {n_unlabeled=}"
@@ -473,15 +475,6 @@ class OpGridPredictionsImage(Operator):
 
     def propagateDirty(self, slot, subindex, roi):
         self.GridPredictions.setDirty()
-
-
-@dataclass
-class UmapRow(RowBase):
-    x: float
-    y: float
-
-
-UmapTable = dict[ItemId, UmapRow]
 
 
 class OpUmap(Operator):
@@ -747,7 +740,7 @@ class OpOCC(Operator):
         self.op_embedding_adapt = OpEmbeddingAdapt(
             parent=self,
             FileList=self.FileList,
-            LabelInput=self.op_grid_labels.LabelTable,
+            Input=self.op_grid_labels.LabelTable,
             AdaptionParameters=self.AdaptionParameters,
         )
         self.op_embedding_adapt.progress_signal.subscribe(self.progress_signal)
@@ -909,7 +902,7 @@ class OpOCC(Operator):
     def _setInSlot(self, slot, subindex: int, roi: "Roi", value: Any):
         # For annotations from UI
         if slot == self.LabelInputs:
-            self.op_grid_labels.LabelInput[roi._pslice] = value
+            self.op_grid_labels.Input[roi._pslice] = value
 
         if slot == self.AnnotationsTableCacheInput:
             self.op_grid_labels.forceValue(value)

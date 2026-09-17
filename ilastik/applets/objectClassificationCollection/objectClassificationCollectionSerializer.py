@@ -23,13 +23,13 @@ from typing import TYPE_CHECKING
 from ilastik.applets.base.appletSerializer import AppletSerializer, SerialClassifierSlot
 from ilastik.applets.base.appletSerializer.slotSerializer import (
     SerialDataclassDictSlot,
-    SerialLabelTableSlot,
     SerialListSlot,
     SerialSlot,
 )
-from ilastik.applets.objectClassificationCollection.opObjectClassificationCollection import EmbeddingSource, UmapRow
-
-from .types import EmbeddingVector, LabelRow
+from ilastik.applets.objectFeatureCollection.types import EmbeddingTable
+from ilastik.applets.objectClassificationCollection.opObjectClassificationCollection import EmbeddingSource
+from ilastik.applets.objectClassificationCollection.types import UmapTable
+from .types import LabelRow, LabelTable
 
 if TYPE_CHECKING:
     from .opObjectClassificationCollection import OpOCC
@@ -60,10 +60,10 @@ class ObjectClassificationCollectionSerializer(AppletSerializer):
             SerialListSlot(operator.PmapColors, transform=lambda x: tuple(x.flat)),
             EmbeddingSelectSerializer(operator.SelectEmbeddingSource),
             SerialDataclassDictSlot(
-                operator.AdaptedEmbeddings, EmbeddingVector, operator.embedding_cache, operator.EmbeddingCacheInput
+                operator.AdaptedEmbeddings, EmbeddingTable, operator.embedding_cache, operator.EmbeddingCacheInput
             ),
-            SerialLabelTableSlot(
-                operator.AnnotationsTable, LabelRow, operator.op_grid_labels, operator.AnnotationsTableCacheInput
+            SerialDataclassDictSlot(
+                operator.AnnotationsTable, LabelTable, operator.op_grid_labels, operator.AnnotationsTableCacheInput
             ),
             SerialClassifierSlot(
                 operator.Classifier, operator.classifier_cache_original_embedding, name="ClassifierForests"
@@ -73,9 +73,9 @@ class ObjectClassificationCollectionSerializer(AppletSerializer):
                 operator.classifier_cache_adapted_embedding,
                 name="ClassifierForests_adapted_features",
             ),
-            SerialDataclassDictSlot(operator.Umap, UmapRow, operator.umap_cache, operator.UmapCacheInput),
+            SerialDataclassDictSlot(operator.Umap, UmapTable, operator.umap_cache, operator.UmapCacheInput),
             SerialDataclassDictSlot(
-                operator.AdaptedUmap, UmapRow, operator.umap_adapted_cache, operator.AdaptedUmapCacheInput
+                operator.AdaptedUmap, UmapTable, operator.umap_adapted_cache, operator.AdaptedUmapCacheInput
             ),
         ]
 
