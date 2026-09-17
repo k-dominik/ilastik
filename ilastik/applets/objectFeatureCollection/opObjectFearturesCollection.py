@@ -18,14 +18,12 @@
 # on the ilastik web site at:
 #          http://ilastik.org/license.html
 ###############################################################################
-from dataclasses import dataclass
-from typing import TYPE_CHECKING, Any, Optional
+from typing import TYPE_CHECKING, Optional
 
-import numpy.typing as npt
+from ilastik.applets.objectFeatureCollection.types import EmbeddingTable
 
 from ilastik.applets.fileCollection.fileCollectionOps import FileList as FileListT
 from ilastik.applets.fileCollection.fileCollectionOps import OpGrid, OpGridView
-from ilastik.applets.objectClassificationCollection.types import EmbeddingVector
 from ilastik.plugins import plugin_manager
 from lazyflow.operator import InputSlot, Operator, OutputSlot, Slot
 from lazyflow.operators.ioOperators.types import FileListDataRow
@@ -37,14 +35,6 @@ if TYPE_CHECKING:
     from lazyflow.base import ItemId
     from lazyflow.graph import Graph
     from lazyflow.rtype import Roi
-
-
-@dataclass
-class FeatureTableRow(FileListDataRow):
-    features: dict[str, npt.NDArray[Any]]
-
-
-EmbeddingTable = dict["ItemId", EmbeddingVector]
 
 
 class OpEmbedding(Operator):

@@ -24,7 +24,7 @@ from ilastik.applets.base.appletSerializer import (
     AppletSerializer,
 )
 from ilastik.applets.base.appletSerializer.slotSerializer import SerialDataclassDictSlot
-from ilastik.applets.objectClassificationCollection.types import EmbeddingVector
+from ilastik.applets.objectFeatureCollection.opObjectFearturesCollection import EmbeddingTable
 
 if TYPE_CHECKING:
     from .opObjectFearturesCollection import OpObjectFeaturesCollection
@@ -37,8 +37,8 @@ class ObjectFeatureCollectionSerializer(AppletSerializer):
     def __init__(self, topGroupName, operator: "OpObjectFeaturesCollection"):
         self.VERSION = 1  # Make sure to bump the version in case you make any changes in the serialization
         serialSlots = [
-            SerialDataclassDictSlot(
-                operator.Embedding, EmbeddingVector, operator.embedding_cache, operator.EmbeddingCacheInput
+            SerialDataclassDictSlot[EmbeddingTable](
+                operator.Embedding, EmbeddingTable, operator.embedding_cache, operator.EmbeddingCacheInput
             ),
         ]
 

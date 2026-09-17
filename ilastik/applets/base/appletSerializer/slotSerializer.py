@@ -26,7 +26,7 @@ import re
 import tempfile
 import warnings
 from dataclasses import fields
-from typing import TYPE_CHECKING, Any, Generic, List, Optional, Tuple, Type, TypeVar
+from typing import TYPE_CHECKING, Any, Generic, List, Mapping, Optional, Tuple, Type, TypeVar
 
 import h5py
 import numpy
@@ -40,6 +40,7 @@ from lazyflow.operators.valueProviders import OpValueCache
 from lazyflow.roi import roiToSlice, sliceToRoi
 from lazyflow.slot import InputSlot, OutputSlot, Slot
 from lazyflow.utility import timeLogged
+from pydantic import TypeAdapter
 
 from . import jsonSerializerRegistry
 from .legacyClassifiers import deserialize_classifier_factory, deserialize_classifier_type
@@ -365,13 +366,50 @@ class SerialDataclassSlot(SerialSlot[_PT]):
         slot.setValue(dataclass_from_h5(self._cls, subgroup))
 
 
-class SerialDataclassDictSlot(SerialSlot[dict[ItemId, _PT]]):
+def write_group(base_group: h5py.Group, values: Mapping[str, Any]) -> None:
+    for name, value in values.items():
+        if isinstance(value, Mapping):
+            write_group(base_group.create_group(name), value)
+        elif isinstance(value, str):
+            dtype = h5py.string_dtype(encoding="utf-8")
+            base_group.create_dataset(name, data=value, dtype=dtype)
+        elif isinstance(value, (np.ndarray, np.number, int, float, bool)):
+            base_group.create_dataset(name, data=value)
+        else:
+            raise TypeError(f"Cannot write field {name} with type {type(value).__name__}")
+
+
+def read_dataset(dataset: h5py.Dataset) -> Any:
+    if h5py.check_string_dtype(dataset.dtype) is not None:
+        return dataset.asstr()[()]
+
+    value = dataset[()]
+
+    if isinstance(value, np.generic):
+        return value.item()
+
+    return value
+
+
+def read_group(group: h5py.Group) -> dict[str, Any]:
+    values: dict[str, Any] = {}
+    for name, node in group.items():
+        if isinstance(node, h5py.Group):
+            values[name] = read_group(node)
+
+        assert isinstance(node, h5py.Dataset)
+        values[name] = read_dataset(node)
+    return values
+
+
+class SerialDataclassDictSlot(SerialSlot[_PT]):
+
     def __init__(
         self,
-        slot: Slot[dict[ItemId, _PT]],
+        slot: Slot[_PT],
         dataclass_type: Type[_PT],
         cache: OpValueCache,
-        inslot: Optional[Slot[dict[ItemId, _PT]]] = None,
+        inslot: Optional[Slot[_PT]] = None,
         name: Optional[str] = None,
         subname: Optional[str] = None,
         default: Any = None,
@@ -387,91 +425,45 @@ class SerialDataclassDictSlot(SerialSlot[dict[ItemId, _PT]]):
             depends=depends,
             selfdepends=selfdepends,
         )
+        print(f"{dataclass_type} {dataclass_type.__name__}")
         self._cls = dataclass_type
+        self._type_adapter: TypeAdapter[_PT] = TypeAdapter(dataclass_type)
         self._cache = cache
         self._bind(cache.Input)
 
-    def _serialize(self, group: h5py.Group, name: str, slot: Slot[_T]):
+    @staticmethod
+    def _saveValue(group: h5py.Group, name: str, value: Mapping[str, Any]):
+        """Separate so that subclasses can override, if necessary.
+
+        For instance, SerialListSlot needs to save an extra attribute
+        if the value is an empty list.
+
+        """
+        write_group(group, value)
+
+    def _serialize(self, group: h5py.Group, name: str, slot: Slot[dict[ItemId, _PT]]):
+        """
+        :param group: The parent group.
+        :type group: h5py.Group
+        :param name: The name of the data or group
+        :type name: string
+        :param slot: the slot to serialize
+        :type slot: SerialSlot
+
+        """
         if self._cache._dirty:
             return
-        return super()._serialize(group, name, slot)
-
-    @staticmethod
-    def _saveValue(group: h5py.Group, name: str, value: dict[ItemId, _PT]):
-        """Separate so that subclasses can override, if necessary.
-
-        For instance, SerialListSlot needs to save an extra attribute
-        if the value is an empty list.
-
-        """
-        g = group.create_group(name)
-        for item_id, ds_instance in value.items():
-            id_group = g.create_group(f"{item_id}")
-            dataclass_to_h5(id_group, ds_instance)
+        subgroup = group.create_group(name)
+        if slot.level == 0:
+            self._saveValue(subgroup, name, self._type_adapter.dump_python(slot.value))
+        else:
+            for i, subslot in enumerate(slot):
+                subname = self.subname.format(i)
+                self._serialize(subgroup, subname, slot[i])
 
     def _getValue(self, subgroup: h5py.Group, slot: Slot[dict[ItemId, _PT]]):
-        print(f"SerialDataclassDictSlot._getValue {slot=} {subgroup.name=}")
-        out: dict[ItemId, _PT] = {}
-        for k in subgroup.keys():
-            assert isinstance(k, str)
-            id = ItemId(int(k))
-            out[id] = dataclass_from_h5(self._cls, subgroup[k])
-
-        slot[()] = out
-
-    def deserialize(self, group):
-        """ensure dirty is false"""
-        super().deserialize(group)
-        self.dirty = False
-
-
-class SerialLabelTableSlot(SerialSlot[dict[ItemId, _PT]]):
-    def __init__(
-        self,
-        slot: Slot[dict[ItemId, _PT]],
-        dataclass_type: Type[_PT],
-        cache: "OpGridLabels",
-        inslot: Optional[Slot[dict[ItemId, _PT]]] = None,
-        name: Optional[str] = None,
-        subname: Optional[str] = None,
-        default: Any = None,
-        depends: Optional[List[Slot]] = None,
-        selfdepends: bool = True,
-    ):
-        super().__init__(
-            slot=slot,
-            inslot=inslot,
-            name=name,
-            subname=subname,
-            default=default,
-            depends=depends,
-            selfdepends=selfdepends,
-        )
-        self._cls = dataclass_type
-        self._cache = cache
-
-    @staticmethod
-    def _saveValue(group: h5py.Group, name: str, value: dict[ItemId, _PT]):
-        """Separate so that subclasses can override, if necessary.
-
-        For instance, SerialListSlot needs to save an extra attribute
-        if the value is an empty list.
-
-        """
-        g = group.create_group(name)
-        for item_id, ds_instance in value.items():
-            id_group = g.create_group(f"{item_id}")
-            dataclass_to_h5(id_group, ds_instance)
-
-    def _getValue(self, subgroup: h5py.Group, slot: Slot[dict[ItemId, _PT]]):
-        print(f"SerialDataclassDictSlot._getValue {slot=} {subgroup.name=}")
-        out: dict[ItemId, _PT] = {}
-        for k in subgroup.keys():
-            assert isinstance(k, str)
-            id = ItemId(int(k))
-            out[id] = dataclass_from_h5(self._cls, subgroup[k])
-
-        slot[()] = out
+        data = read_group(subgroup)
+        slot[()] = self._type_adapter.validate_python(data)
 
     def deserialize(self, group):
         """ensure dirty is false"""
