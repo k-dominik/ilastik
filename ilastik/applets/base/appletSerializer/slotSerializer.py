@@ -396,9 +396,9 @@ def read_group(group: h5py.Group) -> dict[str, Any]:
     for name, node in group.items():
         if isinstance(node, h5py.Group):
             values[name] = read_group(node)
-
-        assert isinstance(node, h5py.Dataset)
-        values[name] = read_dataset(node)
+        else:
+            assert isinstance(node, h5py.Dataset), f"{type(node)=} {node.name}"
+            values[name] = read_dataset(node)
     return values
 
 

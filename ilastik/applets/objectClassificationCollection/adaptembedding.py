@@ -58,12 +58,15 @@ class Projector(nn.Module):
       - a normalized projection (used by the three adaptation losses).
     """
 
-    def __init__(self, input_dim: int, hidden_dim: int = 256, out_dim: int = 128):
+    def __init__(self, input_dim: int, hidden_dim: int = 256, output_dim: int = 128):
         super().__init__()
+        self.input_dim = input_dim
+        self.hidden_dim = hidden_dim
+        self.output_dim = output_dim
         self.layer1 = nn.Linear(input_dim, hidden_dim)
         self.bn = nn.BatchNorm1d(hidden_dim)
         self.act = nn.GELU()
-        self.layer2 = nn.Linear(hidden_dim, out_dim)
+        self.layer2 = nn.Linear(hidden_dim, output_dim)
 
     def forward(self, x):
         hidden = self.act(self.bn(self.layer1(x)))
@@ -298,7 +301,7 @@ def adapt_features(
     item_labels: LabelTable,
     num_classes: int,
     backbone: nn.Module,
-    projector: nn.Module,
+    projector: Projector,
     device: DeviceLikeType,
     labeled_fraction: float,
     cancellation_token: CancellationToken,
