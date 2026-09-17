@@ -27,6 +27,7 @@ from pydantic.dataclasses import dataclass
 
 from lazyflow.base import ItemId
 from lazyflow.operators.ioOperators.types import RowBase
+from torch import Tensor, from_numpy
 
 
 @dataclass(config=ConfigDict(arbitrary_types_allowed=True))
@@ -70,3 +71,35 @@ def restore_label_table(data_dict: dict[Literal["indices", "labels"], Any]) -> "
 
 
 LabelTable = Annotated[dict[ItemId, LabelRow], PlainSerializer(dump_label_table), BeforeValidator(restore_label_table)]
+
+
+def to_np(tensor_dict: dict[str, Any]) -> dict[str, Any]:
+    return {name: tensor.detach().cpu().numpy() for name, tensor in tensor_dict.items()}
+
+
+def from_np(np_dict: dict[str, Any]) -> dict[str, Any]:
+    return {name: from_numpy(np.atleast_1d(nparray)) for name, nparray in np_dict.items()}
+
+
+@dataclass(config=ConfigDict(arbitrary_types_allowed=True))
+class ProjectorData:
+    state_dict: dict[str, Tensor]
+    adaptation_parameters: AdaptionParameters
+    input_dim: int
+    hidden_dim: int
+    output_dim: int
+    n_epochs: int
+    # label_table
+    # unlabeled_items
+
+
+@dataclass(config=ConfigDict(arbitrary_types_allowed=True))
+class ProjectorDataS:
+    state_dict: Annotated[dict[str, Tensor], PlainSerializer(to_np), BeforeValidator(from_np)]
+    adaptation_parameters: AdaptionParameters
+    input_dim: int
+    hidden_dim: int
+    output_dim: int
+    n_epochs: int
+    # label_table
+    # unlabeled_items

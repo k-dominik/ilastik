@@ -53,13 +53,13 @@ from ilastik.applets.labeling.labelingGui import LabelingGui, LabelingSlots
 from ilastik.applets.layerViewer.layerViewerGui import LayerViewerGui
 from ilastik.applets.objectClassification.opObjectClassification import InvalidObjectIndex
 from .opObjectClassificationCollection import PredictionRow, EmbeddingSource
-from .types import AdaptionParameters
+from .types import AdaptionParameters, ProjectorData
 from ilastik.shell.gui.iconMgr import ilastikIcons
 from ilastik.utility.bind import bind
 from ilastik.utility.gui import ThreadRouter, threadRouted
 from lazyflow.base import ItemId
 from lazyflow.cancel_token import CancellationTokenSource
-from lazyflow.slot import InputSlot, Slot
+from lazyflow.slot import InputSlot, Slot, valueContext
 
 logger = logging.getLogger(__name__)
 
@@ -81,6 +81,13 @@ def _listReplace(old, new):
 class SelectionInformation:
     shift_down: bool
     selection: list[int]
+
+
+EFFORT_DICT = {
+    0: AdaptionParameters(n_unlabeled=64, labeled_fraction=0.25),
+    1: AdaptionParameters(n_unlabeled=256, labeled_fraction=0.25),
+    2: AdaptionParameters(n_unlabeled=768, labeled_fraction=0.25),
+}
 
 
 class SelectionViewBox(pyqtgraph.ViewBox):
@@ -180,7 +187,6 @@ class ScatterWidget(QWidget):
         self._tlo.SelectEmbeddingSource.notifyDirty(self._update_embeddings)
 
     def _update_embeddings(self, *args, **kwargs):
-
         umap_result = numpy.array([(r.x, r.y) for r in self._tlo.UmapForDisplay.value.values()])
         x, y = umap_result[:, 0], umap_result[:, 1]
 
@@ -610,6 +616,7 @@ class ObjectClassificationCollectionGui(LabelingGui["OpOCC"]):
         layout.addLayout(effort_layout)
         layout.addWidget(btn)
         layout.addStretch()
+        self.topLevelOperatorView.AdaptionParameters.setValue(EFFORT_DICT[0])
 
         def cancel(*args):
             assert self._cancellation_token_source
@@ -630,26 +637,20 @@ class ObjectClassificationCollectionGui(LabelingGui["OpOCC"]):
 
             effort = self._effort_slider.value()
 
-            effort_dict = {
-                0: AdaptionParameters(n_unlabeled=64, labeled_fraction=0.25),
-                1: AdaptionParameters(n_unlabeled=256, labeled_fraction=0.25),
-                2: AdaptionParameters(n_unlabeled=768, labeled_fraction=0.25),
-            }
-
-            self.topLevelOperatorView.AdaptionParameters.setValue(effort_dict[effort])
+            self.topLevelOperatorView.AdaptionParameters.setValue(EFFORT_DICT[effort])
 
             class _CalcThread(QThread):
 
                 def run(self):
                     print(f"_fine_tuning {args=} {kwargs=}")
-                    res = mainOperator.AdaptedProjector.value
-                    print(f"done {res=}")
-                    mainOperator.op_embedding.FineTunedProjector.setValue(res)
+                    with valueContext(mainOperator.FreezeProjector, False):
+                        _ = mainOperator.AdaptedProjectorData.value
+                        print(f"done {_=}")
 
             self._cancellation_token_source = CancellationTokenSource()
             token = self._cancellation_token_source.token
 
-            if mainOperator.AdaptedProjector.ready():
+            if mainOperator.AdaptedProjectorData.ready():
                 mainOperator.cancellation_token(token)
                 t = _CalcThread(parent=self)
                 t.start()

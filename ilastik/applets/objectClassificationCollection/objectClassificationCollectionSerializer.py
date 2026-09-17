@@ -29,7 +29,7 @@ from ilastik.applets.base.appletSerializer.slotSerializer import (
 from ilastik.applets.objectFeatureCollection.types import EmbeddingTable
 from ilastik.applets.objectClassificationCollection.opObjectClassificationCollection import EmbeddingSource
 from ilastik.applets.objectClassificationCollection.types import UmapTable
-from .types import LabelRow, LabelTable
+from .types import LabelTable, ProjectorDataS
 
 if TYPE_CHECKING:
     from .opObjectClassificationCollection import OpOCC
@@ -76,6 +76,12 @@ class ObjectClassificationCollectionSerializer(AppletSerializer):
             SerialDataclassDictSlot(operator.Umap, UmapTable, operator.umap_cache, operator.UmapCacheInput),
             SerialDataclassDictSlot(
                 operator.AdaptedUmap, UmapTable, operator.umap_adapted_cache, operator.AdaptedUmapCacheInput
+            ),
+            SerialDataclassDictSlot(
+                operator.AdaptedProjectorData,
+                ProjectorDataS,
+                operator.projector_cache,
+                operator.AdaptedProjectorDataCacheInput,
             ),
         ]
 

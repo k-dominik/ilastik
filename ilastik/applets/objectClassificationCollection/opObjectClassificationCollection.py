@@ -101,7 +101,7 @@ from lazyflow.stype import Opaque
 from lazyflow.utility.grid import _OUTPUT_AXIS_KEYS, ImageGrid
 from lazyflow.utility.orderedSignal import OrderedSignal
 
-from .types import LabelRow, UmapTable, UmapRow
+from .types import LabelRow, ProjectorData, UmapTable, UmapRow
 
 if TYPE_CHECKING:
     from lazyflow.graph import Graph
@@ -236,7 +236,7 @@ class OpEmbeddingAdapt(Operator):
     ModelId = InputSlot[str](value="dinov2_vits14_reg")
     AdaptionParameters = InputSlot["AdaptionParametersT"](stype="object")
 
-    Projector = OutputSlot(stype="object")
+    Projector = OutputSlot[ProjectorData](stype="object")
 
     def __init__(
         self,
@@ -292,7 +292,17 @@ class OpEmbeddingAdapt(Operator):
 
         # ensure we're "done" in any case
         self.progress_signal(100)
-        return [projector]
+
+        projector_data = ProjectorData(
+            state_dict=projector.state_dict(),
+            adaptation_parameters=adaption_parameters,
+            input_dim=projector.input_dim,
+            hidden_dim=projector.hidden_dim,
+            output_dim=projector.output_dim,
+            n_epochs=history[-1]["epoch"],
+        )
+
+        return [projector_data]
 
     def _prepare_items(self, items: "FileListT", labels: "LabelTableT", n_unlabeled: int) -> "FileListT":
         unlabeled = [k for k in items if k not in labels or labels[k].label == 0]
@@ -528,7 +538,7 @@ def batched(iterable: Iterable[_T], n: int, *, strict: bool = False) -> Iterable
 
 class OpEmbedding(Operator):
     Embedding = InputSlot["EmbeddingTable"](stype="object")
-    FineTunedProjector = InputSlot[Projector](stype="object")
+    FineTunedProjectorData = InputSlot[ProjectorData](stype="object")
 
     ProjectedEmbedding = OutputSlot[EmbeddingTable](stype="object")
 
@@ -537,11 +547,11 @@ class OpEmbedding(Operator):
         parent: Optional[Operator] = None,
         graph: Optional["Graph"] = None,
         Embedding: Optional[Slot["EmbeddingTable"]] = None,
-        Projector: Optional[Slot["Projector"]] = None,
+        FineTunedProjectorData: Optional[Slot["ProjectorData"]] = None,
     ):
         super().__init__(parent=parent, graph=graph)
         self.Embedding.setOrConnectIfAvailable(Embedding)
-        self.FineTunedProjector.setOrConnectIfAvailable(Projector)
+        self.FineTunedProjectorData.setOrConnectIfAvailable(FineTunedProjectorData)
         self._table: dict["ItemId", FileListDataRow] = {}
         self.progress_signal = OrderedSignal()
 
@@ -551,7 +561,13 @@ class OpEmbedding(Operator):
 
     def execute(self, slot, subindex, roi, result):
         assert slot == self.ProjectedEmbedding
-        projector = self.FineTunedProjector.value
+        projector_data = self.FineTunedProjectorData.value
+        projector = Projector(
+            input_dim=projector_data.input_dim,
+            hidden_dim=projector_data.hidden_dim,
+            output_dim=projector_data.output_dim,
+        )
+        projector.load_state_dict(projector_data.state_dict)
 
         return [
             self._compute_batchwise(
@@ -689,6 +705,7 @@ class OpOCC(Operator):
     FreezePredictions = InputSlot(stype="bool", value=True)
     AdaptionParameters = InputSlot["AdaptionParametersT"](stype="object", optional=True)
     SelectEmbeddingSource = InputSlot[EmbeddingSource](stype="object")
+    FreezeProjector = InputSlot(stype="bool", value=True)
 
     GridImage = OutputSlot()
     GridLabels = OutputSlot()
@@ -706,7 +723,8 @@ class OpOCC(Operator):
     Umap = OutputSlot[UmapTable](stype="object")
     UmapCacheInput = InputSlot[UmapTable](stype="object", optional=True)
 
-    AdaptedProjector = OutputSlot[Projector](stype="object")
+    AdaptedProjectorData = OutputSlot[ProjectorData](stype="object")
+    AdaptedProjectorDataCacheInput = InputSlot[ProjectorData](stype="object", optional=True)
     AdaptedEmbeddings = OutputSlot["EmbeddingTable"](stype="object")
     EmbeddingCacheInput = InputSlot["EmbeddingTable"](stype="object", optional=True)
     AdaptedUmap = OutputSlot[UmapTable](stype="object")
@@ -744,11 +762,14 @@ class OpOCC(Operator):
             AdaptionParameters=self.AdaptionParameters,
         )
         self.op_embedding_adapt.progress_signal.subscribe(self.progress_signal)
-        self.op_embedding_adapt_cache = OpValueCache[Projector](parent=self)
-        self.op_embedding_adapt_cache.Input.connect(self.op_embedding_adapt.Projector)
-        self.AdaptedProjector.connect(self.op_embedding_adapt_cache.Output)
+        self.projector_cache = OpValueCache[ProjectorData](parent=self)
+        self.projector_cache.Input.connect(self.op_embedding_adapt.Projector)
+        self.projector_cache.fixAtCurrent.connect(self.FreezeProjector)
+        self.AdaptedProjectorData.connect(self.projector_cache.Output)
 
-        self.op_embedding = OpEmbedding(parent=self, Embedding=self.Embedding)
+        self.op_embedding = OpEmbedding(
+            parent=self, Embedding=self.Embedding, FineTunedProjectorData=self.projector_cache.Output
+        )
 
         self.embedding_cache = OpValueCache[EmbeddingTable](parent=self)
         self.embedding_cache.Input.connect(self.op_embedding.ProjectedEmbedding)
@@ -915,6 +936,9 @@ class OpOCC(Operator):
 
         if slot == self.EmbeddingCacheInput:
             self.embedding_cache.forceValue(value)
+
+        if slot == self.AdaptedProjectorDataCacheInput:
+            self.projector_cache.forceValue(value)
 
     def addLane(self, laneIndex: int):
         assert laneIndex == 0
