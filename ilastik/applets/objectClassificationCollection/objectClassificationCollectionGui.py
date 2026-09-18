@@ -174,14 +174,6 @@ class ScatterWidget(QWidget):
         button_group_coloring.buttonToggled.connect(self._recolor)
         layout.addLayout(combo_layout_coloring)
 
-        calculate_embeddings_layout = QHBoxLayout(self)
-        emb_button = QPushButton("Show")
-
-        emb_button.clicked.connect(self._request_umap_data)
-        calculate_embeddings_layout.addWidget(emb_button)
-
-        layout.addLayout(calculate_embeddings_layout)
-
         self._graphics = pyqtgraph.GraphicsLayoutWidget()
         layout.addWidget(self._graphics)
         self.setLayout(layout)
