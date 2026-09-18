@@ -20,6 +20,7 @@
 ###############################################################################
 import enum
 import logging
+import traceback
 import weakref
 from dataclasses import dataclass
 from functools import partial
@@ -55,14 +56,15 @@ from volumina.pixelpipeline.datasources.factories import createDataSource
 from ilastik.applets.labeling.labelingGui import LabelingGui, LabelingSlots
 from ilastik.applets.layerViewer.layerViewerGui import LayerViewerGui
 from ilastik.applets.objectClassification.opObjectClassification import InvalidObjectIndex
-from .opObjectClassificationCollection import PredictionRow, EmbeddingSource
-from .types import AdaptionParameters, ProjectorData
 from ilastik.shell.gui.iconMgr import ilastikIcons
 from ilastik.utility.bind import bind
 from ilastik.utility.gui import ThreadRouter, threadRouted
 from lazyflow.base import ItemId
 from lazyflow.cancel_token import CancellationTokenSource
 from lazyflow.slot import InputSlot, Slot, valueContext
+
+from .opObjectClassificationCollection import EmbeddingSource, PredictionRow
+from .types import AdaptionParameters, ProjectorData
 
 logger = logging.getLogger(__name__)
 
@@ -174,7 +176,8 @@ class ScatterWidget(QWidget):
 
         calculate_embeddings_layout = QHBoxLayout(self)
         emb_button = QPushButton("Show")
-        emb_button.clicked.connect(self._update_embeddings)
+
+        emb_button.clicked.connect(self._request_umap_data)
         calculate_embeddings_layout.addWidget(emb_button)
 
         layout.addLayout(calculate_embeddings_layout)
@@ -187,12 +190,32 @@ class ScatterWidget(QWidget):
         self._tlo.CachedPredictions.notifyDirty(self._recolor)
         self._tlo.PmapColors.notifyDirty(self._recolor)
         self._tlo.LabelColors.notifyDirty(self._recolor)
-        self._tlo.SelectEmbeddingSource.notifyDirty(self._update_embeddings)
+        self._tlo.SelectEmbeddingSource.notifyDirty(self._request_umap_data)
 
-    def _update_embeddings(self, *args, **kwargs):
-        umap_result = numpy.array([(r.x, r.y) for r in self._tlo.UmapForDisplay.value.values()])
+    def _request_umap_data(self, *args, **kwargs):
+
+        tlo = self._tlo
+
+        class _CalcThread(QThread):
+            umapDone = Signal(object)
+            error = Signal(str)
+
+            def run(self):
+                try:
+                    umap_result = numpy.array([(r.x, r.y) for r in tlo.UmapForDisplay.value.values()])
+                    self.umapDone.emit(umap_result)
+                except Exception:
+                    self.error.emit(traceback.format_exc())
+                finally:
+                    self.finished.emit()
+
+        t = _CalcThread(parent=self)
+        t.umapDone.connect(self._update_embeddings)
+        t.error.connect(lambda x: logger.error(x))
+        t.start()
+
+    def _update_embeddings(self, umap_result: numpy.ndarray):
         x, y = umap_result[:, 0], umap_result[:, 1]
-
         if self.plot:
             self._graphics.removeItem(self.plot)
             self.plot = None
