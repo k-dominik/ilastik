@@ -43,6 +43,7 @@ class ObjectFeatureCollectionGui(LayerViewerGui[OpObjectFeaturesCollection]):
             crosshair,
             is_3d_widget_visible,
         )
+        self.parentApplet = parentApplet
 
     def setupLayers(self):
         mainOperator = self.topLevelOperatorView
@@ -70,6 +71,7 @@ class ObjectFeatureCollectionGui(LayerViewerGui[OpObjectFeaturesCollection]):
                     _ = mainOperator.Embedding[()].wait()
 
             t = _CalcThread(parent=self)
+            t.finished.connect(self.parentApplet.appletStateUpdateRequested)
             t.start()
 
         layout = QVBoxLayout()

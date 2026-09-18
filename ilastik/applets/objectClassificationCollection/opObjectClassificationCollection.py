@@ -11,7 +11,6 @@ Todos:
       class without counter and the likes - this is only needed in dataselection.
 - [ ] pipe through the embedding backbone from feature computation
 - [ ] check if there are enough images for the selected efforts
-- [ ]
 
 Done:
 - [x] ui: live update button and state tracking
