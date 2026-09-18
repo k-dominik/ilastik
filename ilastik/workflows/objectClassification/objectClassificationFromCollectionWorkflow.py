@@ -104,27 +104,29 @@ class OcFromCollection(Workflow):
         opClassify.Embedding.connect(opFeatures.Embedding)
 
     def handleAppletStateUpdateRequested(self):
-        op_data_selection = self.dataSelectionApplet.topLevelOperator
-        input_ready = (
-            op_data_selection.FileListTable.ready()
-            and len(op_data_selection.FileListTable) > 0
-            and len(op_data_selection.FileListTable[0].value) > 0
-            and not self.dataSelectionApplet.busy
-        )
-        self._shell.setAppletEnabled(self.objectFeatureCollectionApplet, input_ready)
+        # op_data_selection = self.dataSelectionApplet.topLevelOperator
+        # input_ready = (
+        #     op_data_selection.FileListTable.ready()
+        #     and len(op_data_selection.FileListTable) > 0
+        #     and len(op_data_selection.FileListTable[0].value) > 0
+        #     and not self.dataSelectionApplet.busy
+        # )
+        # self._shell.setAppletEnabled(self.objectFeatureCollectionApplet, input_ready)
 
-        op_features = self.objectFeatureCollectionApplet.topLevelOperator
-        features_ready = op_features.Embedding.ready() and op_features.embedding_cache.hasCacheValue()
+        # op_features = self.objectFeatureCollectionApplet.topLevelOperator
+        # features_ready = op_features.Embedding.ready() and op_features.embedding_cache.hasCacheValue()
 
-        op_oc = self.objectClassificationApplet.topLevelOperator
-        live_update_active = not op_oc.FreezePredictions.value
+        # op_oc = self.objectClassificationApplet.topLevelOperator
+        # live_update_active = not op_oc.FreezePredictions.value
 
-        self._shell.setAppletEnabled(self.dataSelectionApplet, not live_update_active)
-        self._shell.setAppletEnabled(self.objectFeatureCollectionApplet, input_ready and not live_update_active)
-        self._shell.setAppletEnabled(self.objectClassificationApplet, input_ready and features_ready)
+        # self._shell.setAppletEnabled(self.dataSelectionApplet, not live_update_active)
+        # self._shell.setAppletEnabled(self.objectFeatureCollectionApplet, input_ready and not live_update_active)
+        # self._shell.setAppletEnabled(self.objectClassificationApplet, input_ready and features_ready)
 
-        busy = False
-        busy |= self.dataSelectionApplet.busy
-        busy |= self.objectFeatureCollectionApplet.busy
-        busy |= self.objectClassificationApplet.busy
-        self._shell.enableProjectChanges(not busy)
+        # busy = False
+        # busy |= self.dataSelectionApplet.busy
+        # busy |= self.objectFeatureCollectionApplet.busy
+        # busy |= self.objectClassificationApplet.busy
+        # self._shell.enableProjectChanges(not busy)
+        # TODO: Need to make this work ;)
+        pass
