@@ -238,9 +238,9 @@ class ScatterWidget(QWidget):
         if not predictions:
             return []
 
-        pmap_colors = self._tlo.PmapColors.value
+        pmap_colors = [QColor(*v).lighter() for v in self._tlo.PmapColors.value]
 
-        colors = [QColor(*pmap_colors[predictions[id].prediction - 1]).lighter() for id in self._indices]
+        colors = [pmap_colors[predictions[id].prediction - 1] for id in self._indices]
         brushes = [pyqtgraph.mkBrush(color) for color in colors]
         return brushes
 
