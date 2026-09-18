@@ -30,9 +30,10 @@ import vigra
 
 from lazyflow.base import Axiskey
 
-Array4D = npt.NDArray[np.floating | np.integer]
+Array5D = npt.NDArray[np.floating | np.integer]
 
-_OUTPUT_AXIS_KEYS: Final = ("x", "y", "z", "c")
+# using volumina order: (time, x,y,z, channels)
+_OUTPUT_AXIS_KEYS: Final = ("t", "x", "y", "z", "c")
 
 
 class RoiLike(Protocol):
@@ -48,10 +49,10 @@ class ImageGridCell:
     image_index: ItemId | None
     """grid cell image index, value at ImageGird._grid_indices[grid_cell]"""
 
-    _output_slice: tuple[slice, slice, slice, slice]
+    _output_slice: tuple[slice, slice, slice, slice, slice]
     """slice (xyzc) to extract the visible portion of the ImageGridCell in the roi - cell-local coordinates"""
 
-    _grid_cell_full_shape: tuple[int, int, int, int]
+    _grid_cell_full_shape: tuple[int, int, int, int, int]
 
     _margin: int
 
@@ -65,19 +66,20 @@ class ImageGridCell:
         image_data: Optional[vigra.VigraArray] = None,
         fill_value: Optional[int | float] = None,
         additional_margin: int = 0,
-    ) -> Array4D:
+    ) -> Array5D:
         """Data that can be written into an array that"""
         grid_data = vigra.taggedView(np.zeros(self._grid_cell_full_shape, dtype=dtype), "".join(_OUTPUT_AXIS_KEYS))
         if fill_value is not None:
             m = self._margin + additional_margin
-            grid_data[m:-m, m:-m, :, :] = fill_value
+            grid_data[:, m:-m, m:-m, :, :] = fill_value
 
-        sx, sy, sz, sc = self._grid_cell_full_shape
+        st, sx, sy, sz, sc = self._grid_cell_full_shape
 
         if image_data is not None:
-            image_data4d = image_data.withAxes(_OUTPUT_AXIS_KEYS)
-            ix, iy, iz, ic = image_data4d.shape
+            image_data5d = image_data.withAxes(_OUTPUT_AXIS_KEYS)
+            it, ix, iy, iz, ic = image_data5d.shape
             assert sc == ic, f"Expect Image {ic=} to have the same number of channels as grid {sc=}"
+            assert st == it, f"Expect Image {st=} to have the same number of channels as grid {it=}"
             offset_data_x = (sx - ix) // 2
             offset_data_y = (sy - iy) // 2
             offset_data_z = (sz - iz) // 2
@@ -88,13 +90,15 @@ class ImageGridCell:
 
             grid_data[
                 (
+                    slice(None),
                     slice(max(0, offset_data_x), min(sx, ix + offset_data_x)),
                     slice(max(0, offset_data_y), min(sy, iy + offset_data_y)),
                     slice(max(0, offset_data_z), min(sz, iz + offset_data_z)),
                     slice(None),
                 )
-            ] = image_data4d[
+            ] = image_data5d[
                 (
+                    slice(None),
                     slice(max(0, offset_image_x), min(sx + offset_image_x, ix)),
                     slice(max(0, offset_image_y), min(sy + offset_image_y, iy)),
                     slice(max(0, offset_image_z), min(sz + offset_image_z, iz)),
@@ -118,6 +122,7 @@ class ImageGrid:
         grid_indices: Sequence[ItemId],
         grid_size_cell_px: int,
         input_axis_keys: Sequence[Axiskey],
+        max_t: int,
         max_z: int,
         n_c: int,
         margin: int = 1,
@@ -144,6 +149,7 @@ class ImageGrid:
               image to display in a certain grid cell
             grid_size_cell_px: Maximum dimension in x-y to fit into the grid
             input_axis_keys: concatenated axis keys
+            max_t: Maximum size along t axis
             max_z: Maximum size along z axis
             n_c: Number of channels
             margin: Number of pixels around the grid_cell_size_px
@@ -155,6 +161,7 @@ class ImageGrid:
         self.grid_size_cell_px = int(grid_size_cell_px) + 2 * self._margin
 
         shape = (
+            int(max_t),
             self.grid_size_cell_px * self._grid_width,
             self.grid_size_cell_px * self._grid_width,
             int(max_z),
@@ -162,12 +169,12 @@ class ImageGrid:
         )
         self.input_axis_keys = tuple(input_axis_keys)
         self.output_shape = shape
-        self._cell_shape = (self.grid_size_cell_px, self.grid_size_cell_px, int(max_z), int(n_c))
+        self._cell_shape = (int(max_t), self.grid_size_cell_px, self.grid_size_cell_px, int(max_z), int(n_c))
         self.output_axis_keys = _OUTPUT_AXIS_KEYS
 
     def grid_cells_per_roi(self, roi: RoiLike) -> Iterator[ImageGridCell]:
-        x_start, y_start, z_start, c_start = roi.start
-        x_stop, y_stop, z_stop, c_stop = roi.stop
+        t_start, x_start, y_start, z_start, c_start = roi.start
+        t_stop, x_stop, y_stop, z_stop, c_stop = roi.stop
 
         roi_start = _GridCoords(x_start, y_start)
         roi_stop = _GridCoords(x_stop, y_stop)
@@ -216,6 +223,7 @@ class ImageGrid:
                 raise ValueError()
 
             roi_local_clamped_slice = (
+                slice(t_start, t_stop),
                 slice(start_coords_clamped_roi_local.x, end_coords_clamped_roi_local.x),
                 slice(start_coords_clamped_roi_local.y, end_coords_clamped_roi_local.y),
                 slice(z_start, z_stop),
@@ -223,6 +231,7 @@ class ImageGrid:
             )
 
             output_slice = (
+                slice(t_start, t_stop),
                 slice(
                     start_offset_in_grid_cell.x,
                     start_offset_in_grid_cell.x + end_coords_clamped_roi_local.x - start_coords_clamped_roi_local.x,
