@@ -23,7 +23,7 @@ import logging
 import weakref
 from dataclasses import dataclass
 from functools import partial
-from typing import TYPE_CHECKING, Any, Callable, Optional, cast
+from typing import TYPE_CHECKING, Any, Callable, Optional, Union, cast
 
 import numpy
 import pyqtgraph
@@ -33,7 +33,9 @@ from qtpy.QtGui import QAction, QBrush, QColor, QIcon, QMouseEvent
 from qtpy.QtWidgets import (
     QButtonGroup,
     QCheckBox,
+    QFrame,
     QGraphicsRectItem,
+    QGridLayout,
     QHBoxLayout,
     QLabel,
     QMenu,
@@ -237,7 +239,8 @@ class ScatterWidget(QWidget):
             return []
 
         pmap_colors = self._tlo.PmapColors.value
-        colors = [pmap_colors[predictions[id].prediction - 1] for id in self._indices]
+
+        colors = [QColor(*pmap_colors[predictions[id].prediction - 1]).lighter() for id in self._indices]
         brushes = [pyqtgraph.mkBrush(color) for color in colors]
         return brushes
 
@@ -488,6 +491,15 @@ class ProgressButton(QPushButton):
         self.setText(self._text[self._state])
 
 
+class HorizontalDivider(QFrame):
+    def __init__(
+        self, parent: Optional[QWidget] = None, flags: Union[Qt.WindowFlags, Qt.WindowType] = Qt.WindowFlags()
+    ) -> None:
+        super().__init__(parent, flags)
+        self.setFrameShape(QFrame.HLine)
+        self.setFrameShadow(QFrame.Sunken)
+
+
 class ObjectClassificationCollectionGui(LabelingGui["OpOCC"]):
     """A subclass of LabelingGui for labeling objects.
 
@@ -555,7 +567,6 @@ class ObjectClassificationCollectionGui(LabelingGui["OpOCC"]):
         self._colorTable_forpmaps = list(colortables.default16_new)
         self._undoStack = self.editor._undoStack
 
-        btn_layout = QHBoxLayout()
         self._interactiveMode = False
         self._live_update_button = QToolButton()
         self._live_update_button.setText("Live Update")
@@ -564,11 +575,9 @@ class ObjectClassificationCollectionGui(LabelingGui["OpOCC"]):
         self._live_update_button.setIcon(QIcon(ilastikIcons.Play))
         self._live_update_button.setToolButtonStyle(Qt.ToolButtonTextBesideIcon)
         self._live_update_button.toggled.connect(self.handleInteractiveModeClicked)
-        btn_layout.addWidget(self._live_update_button)
-        self._labelControlUi.verticalLayout.addLayout(btn_layout)
+        self._labelControlUi.horizontalLayout.addWidget(self._live_update_button)
+        self._labelControlUi.verticalLayout.addWidget(HorizontalDivider())
 
-        combo_layout_embedding = QHBoxLayout(self)
-        combo_layout_embedding.addWidget(QLabel("Embedding"))
         wants_original_embedding = QCheckBox("original")
         wants_adapted_embedding = QCheckBox("adapted")
         button_group_umap_source = QButtonGroup(self)
@@ -578,8 +587,6 @@ class ObjectClassificationCollectionGui(LabelingGui["OpOCC"]):
         radio_layout_embedding = QHBoxLayout(self)
         radio_layout_embedding.addWidget(wants_original_embedding)
         radio_layout_embedding.addWidget(wants_adapted_embedding)
-        combo_layout_embedding.addStretch()
-        combo_layout_embedding.addLayout(radio_layout_embedding)
 
         if not self.topLevelOperatorView.SelectEmbeddingSource.ready():
             self.topLevelOperatorView.SelectEmbeddingSource.setValue(EmbeddingSource.Original)
@@ -587,18 +594,17 @@ class ObjectClassificationCollectionGui(LabelingGui["OpOCC"]):
         button_group_umap_source.buttonToggled.connect(self._update_embedding_source)
         button_group_umap_source.button(self.topLevelOperatorView.SelectEmbeddingSource.value).setChecked(True)
 
-        self._labelControlUi.verticalLayout.addLayout(combo_layout_embedding)
+        # self._labelControlUi.verticalLayout.addLayout(combo_layout_embedding)
 
         self._secondary_controls = EmbeddingWidget(mainOperator, self)
 
         btn = ProgressButton("Adapt Features", "Cancel", "Cancelling")
         self._cancellation_token_source = None
 
-        layout = QVBoxLayout()
-        layout.addWidget(QLabel("Adaptation"))
-        effort_layout = QHBoxLayout()
-
-        effort_layout.addWidget(QLabel("effort"))
+        grid_layout = QGridLayout()
+        grid_layout.addWidget(QLabel("Embedding"), 0, 0, 1, 1)
+        grid_layout.addLayout(radio_layout_embedding, 0, 1, 1, 1)
+        grid_layout.addWidget(QLabel("Effort"), 1, 0, 1, 1)
 
         slider_layout = QVBoxLayout()
         self._effort_slider = QSlider(orientation=Qt.Horizontal)
@@ -611,12 +617,10 @@ class ObjectClassificationCollectionGui(LabelingGui["OpOCC"]):
         high_label = QLabel("high")
         high_label.setAlignment(Qt.AlignRight)
         effort_labels_layout.addWidget(high_label)
-
         slider_layout.addLayout(effort_labels_layout)
-        effort_layout.addLayout(slider_layout)
-        layout.addLayout(effort_layout)
-        layout.addWidget(btn)
-        layout.addStretch()
+        grid_layout.addLayout(slider_layout, 1, 1, 1, 1)
+        grid_layout.addWidget(btn, 2, 0, 1, 2)
+
         self.topLevelOperatorView.AdaptionParameters.setValue(EFFORT_DICT[0])
 
         def cancel(*args):
@@ -663,7 +667,8 @@ class ObjectClassificationCollectionGui(LabelingGui["OpOCC"]):
         btn.start_in_progress.connect(_cal_embedding)
 
         drawer = self.appletDrawer()
-        drawer.verticalLayout.addLayout(layout)
+        drawer.verticalLayout.addLayout(grid_layout)
+        drawer.verticalLayout.addStretch()
 
     @property
     def labelMode(self):
@@ -733,7 +738,7 @@ class ObjectClassificationCollectionGui(LabelingGui["OpOCC"]):
 
             predictLayer.name = self.PREDICTION_LAYER_NAME
             predictLayer.ref_object = None
-            predictLayer.opacity = 0.5
+            predictLayer.opacity = 0.25
             predictLayer.setToolTip("Classification results, assigning a label to each object")
 
             # This weakref stuff is a little more fancy than strictly necessary.
@@ -812,7 +817,6 @@ class ObjectClassificationCollectionGui(LabelingGui["OpOCC"]):
         that object's label.
 
         """
-        print("onClick")
         label = self.editor.brushingModel.drawnNumber
         if label == self.editor.brushingModel.erasingNumber:
             label = 0
@@ -825,7 +829,6 @@ class ObjectClassificationCollectionGui(LabelingGui["OpOCC"]):
         return self.topLevelOperatorView.object_at_coordinate(pos5d)
 
     def handleEditorRightClick(self, position5d, globalWindowCoordinate):
-        print("right click ", position5d)
         obj_id = self._object_id_at(position5d)
         if obj_id == -1:
             return
