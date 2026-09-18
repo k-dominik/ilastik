@@ -40,7 +40,6 @@ class ObjectClassificationCollectionApplet(LabelingApplet):
         self._projectFileGroupName = projectFileGroupName
         self._serializers = [ObjectClassificationCollectionSerializer("oc_collection", self.topLevelOperator)]
         self._topLevelOperator.progress_signal.subscribe(self.progressSignal)
-        self._topLevelOperator.progress_signal.subscribe(lambda x: print(f"progress {x=}"))
 
     def getMultiLaneGui(self):
         """
