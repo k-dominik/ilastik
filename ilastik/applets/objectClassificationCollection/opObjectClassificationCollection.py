@@ -692,6 +692,9 @@ class OpLabelView(Operator):
     def propagateDirty(self, slot, subindex, roi):
         pass
 
+    def object_at_coordinate(self, coordinate5d):
+        return self.op_grid.object_id_at(coordinate5d)
+
 
 class OpOCC(Operator):
     name = "Object Classification for Image Collections"
@@ -899,6 +902,9 @@ class OpOCC(Operator):
 
     def propagateDirty(self, slot, subindex, roi):
         pass
+
+    def object_at_coordinate(self, coordinate5d):
+        return self.op_grid.object_id_at(coordinate5d)
 
     def prepareObjectLabels(self, coordinate) -> tuple[int, int]:
         """

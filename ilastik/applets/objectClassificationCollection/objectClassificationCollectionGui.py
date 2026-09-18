@@ -29,13 +29,14 @@ import numpy
 import pyqtgraph
 import volumina.colortables as colortables
 from qtpy.QtCore import QRectF, Qt, QThread, Signal
-from qtpy.QtGui import QBrush, QColor, QIcon, QMouseEvent
+from qtpy.QtGui import QAction, QBrush, QColor, QIcon, QMouseEvent
 from qtpy.QtWidgets import (
     QButtonGroup,
     QCheckBox,
     QGraphicsRectItem,
     QHBoxLayout,
     QLabel,
+    QMenu,
     QPushButton,
     QSizePolicy,
     QSlider,
@@ -787,12 +788,6 @@ class ObjectClassificationCollectionGui(LabelingGui["OpOCC"]):
                 self._colorTable_forpmaps[row + 1] = element.pmapColor().rgba()
                 predictLayer.colorTable = self._colorTable_forpmaps
 
-    @staticmethod
-    def _getObject(slot, pos5d):
-        slicing = tuple(slice(i, i + 1) for i in pos5d)
-        arr = slot[slicing].wait()
-        return arr.flat[0]
-
     def _updateObjLabel(self, pos5d, label):
         try:
             old_label, object_id = self.topLevelOperatorView.prepareObjectLabels(pos5d)
@@ -825,6 +820,39 @@ class ObjectClassificationCollectionGui(LabelingGui["OpOCC"]):
         topLevelOp = self.topLevelOperatorView
 
         self._updateObjLabel(pos5d, label)
+
+    def _object_id_at(self, pos5d):
+        return self.topLevelOperatorView.object_at_coordinate(pos5d)
+
+    def handleEditorRightClick(self, position5d, globalWindowCoordinate):
+        print("right click ", position5d)
+        obj_id = self._object_id_at(position5d)
+        if obj_id == -1:
+            return
+
+        menu = QMenu(self)
+
+        clearlabel = f"Clear label for object {obj_id}"
+        clear_action = menu.addAction(clearlabel)
+        numLabels = self.labelListData.rowCount()
+        label_actions = []
+        for l in range(numLabels):
+            color_icon = self.labelListData.createIconForLabel(l)
+            act_text = f'Label object {obj_id} as "{self.labelListData[l].name}"'
+            act = QAction(color_icon, act_text, menu)
+            act.setIconVisibleInMenu(True)
+            label_actions.append(act)
+            menu.addAction(act)
+
+        action = menu.exec_(globalWindowCoordinate)
+
+        if action == clear_action:
+            topLevelOp = self.topLevelOperatorView
+            self._updateObjLabel(position5d, 0)
+        elif action in label_actions:
+            label = label_actions.index(action)
+            topLevelOp = self.topLevelOperatorView
+            self._updateObjLabel(position5d, label + 1)
 
     @property
     def interactiveMode(self):

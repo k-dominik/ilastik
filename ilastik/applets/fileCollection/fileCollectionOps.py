@@ -130,6 +130,8 @@ class OpGrid(Operator):
                 )
             )
         )
+        if len(x) == 0:
+            return ItemId(-1)
         assert len(x) == 1
         return ItemId(x[0].image_index)
 
