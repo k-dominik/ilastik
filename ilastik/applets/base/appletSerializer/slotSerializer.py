@@ -425,7 +425,6 @@ class SerialDataclassDictSlot(SerialSlot[_PT]):
             depends=depends,
             selfdepends=selfdepends,
         )
-        print(f"{dataclass_type} {dataclass_type.__name__}")
         self._cls = dataclass_type
         self._type_adapter: TypeAdapter[_PT] = TypeAdapter(dataclass_type)
         self._cache = cache
