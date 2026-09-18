@@ -147,7 +147,7 @@ class LabelingGui(LayerViewerGui[_T]):
         return self._labelControlUi
 
     @property
-    def labelListData(self):
+    def labelListData(self) -> LabelListModel:
         return self._labelControlUi.labelListModel
 
     def selectLabel(self, labelIndex):
