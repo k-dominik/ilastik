@@ -69,7 +69,6 @@ class OpGrid(Operator):
         sub_selection: list[ItemId] = []
         if self.SubsetObjects.ready():
             sub_selection = self.SubsetObjects.value
-            print("Applyting sub selection", sub_selection)
             if len(sub_selection) > 0:
                 self._table = {id: self._table[id] for id in sub_selection}
 
