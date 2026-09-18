@@ -634,7 +634,10 @@ class LabelingGui(LayerViewerGui[_T]):
         # Uncheck all the other buttons
         for tool, button in list(self.toolButtons.items()):
             if tool != toolId:
-                button.setChecked(False)
+                import qtpy.compat
+
+                if qtpy.compat.isalive(button):
+                    button.setChecked(False)
 
         # If we have no editor, we can't do anything yet
         if self.editor is None:

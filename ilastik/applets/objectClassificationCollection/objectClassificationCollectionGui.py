@@ -551,7 +551,7 @@ class ObjectClassificationCollectionGui(LabelingGui["OpOCC"]):
 
     def __init__(self, parentApplet, op: "OpOCC"):
         self.parentApplet = parentApplet
-        self.isInitialized = False  # Need this flag in objectClassificationApplet where initialization is terminated with label selection
+        self.isInitialized = False
         self.__cleanup_fns = []
         # Tell our base class which slots to monitor
         labelSlots = LabelingSlots(
@@ -561,6 +561,7 @@ class ObjectClassificationCollectionGui(LabelingGui["OpOCC"]):
             labelDelete=op.DeleteLabel,
             labelNames=op.LabelNames,
         )
+        self._interactiveMode = False
         self._labelMode = True
 
         self.op = op
@@ -589,8 +590,6 @@ class ObjectClassificationCollectionGui(LabelingGui["OpOCC"]):
 
         self._colorTable_forpmaps = list(colortables.default16_new)
         self._undoStack = self.editor._undoStack
-
-        self._interactiveMode = False
         self._live_update_button = QToolButton()
         self._live_update_button.setText("Live Update")
         self._live_update_button.setCheckable(True)

@@ -18,7 +18,7 @@
 # on the ilastik web site at:
 #          http://ilastik.org/license.html
 ###############################################################################
-from ilastik.applets.labeling.labelingApplet import LabelingApplet
+from ilastik.applets.base.standardApplet import StandardApplet
 
 from ilastik.applets.objectClassificationCollection.objectClassificationCollectionSerializer import (
     ObjectClassificationCollectionSerializer,
@@ -27,16 +27,12 @@ from ilastik.applets.objectClassificationCollection.objectClassificationCollecti
 from .opObjectClassificationCollection import OpOCC
 
 
-class ObjectClassificationCollectionApplet(LabelingApplet):
+class ObjectClassificationCollectionApplet(StandardApplet):
 
-    def __init__(self, workflow, projectFileGroupName, hintOverlayFile=None, pmapOverlayFile=None):
-        if hintOverlayFile is not None:
-            assert isinstance(hintOverlayFile, str)
+    def __init__(self, workflow, projectFileGroupName):
 
-        if not hasattr(self, "_topLevelOperator"):
-            self._topLevelOperator = OpOCC(parent=workflow)
-
-        super().__init__(workflow, projectFileGroupName)
+        self._topLevelOperator = OpOCC(parent=workflow)
+        super().__init__(name=projectFileGroupName, workflow=workflow)
         self._projectFileGroupName = projectFileGroupName
         self._serializers = [ObjectClassificationCollectionSerializer("oc_collection", self.topLevelOperator)]
         self._topLevelOperator.progress_signal.subscribe(self.progressSignal)
@@ -47,15 +43,14 @@ class ObjectClassificationCollectionApplet(LabelingApplet):
         the current layer stack. Which is only the case when the gui objects LayerViewerGui.updateAllLayers run at
         least once after object init.
         """
-        from .objectClassificationCollectionGui import (
-            ObjectClassificationCollectionGui,
-        )  # Prevent imports of QT classes in headless mode
+        from .objectClassificationCollectionGui import ObjectClassificationCollectionGui
 
-        multi_lane_gui = super(LabelingApplet, self).getMultiLaneGui()
+        multi_lane_gui = super().getMultiLaneGui()
         guis = multi_lane_gui.getGuis()
-        if len(guis) > 0 and isinstance(guis[0], ObjectClassificationCollectionGui) and not guis[0].isInitialized:
-            guis[0].selectLabel(0)
-            guis[0].isInitialized = True
+        for gui in guis:
+            if isinstance(gui, ObjectClassificationCollectionGui) and gui.labelListData.selectedIndex().row() < 0:
+                gui.selectLabel(0)
+                gui.isInitialized = True
         return multi_lane_gui
 
     @property
