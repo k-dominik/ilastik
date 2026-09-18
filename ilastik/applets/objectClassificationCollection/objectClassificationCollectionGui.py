@@ -192,6 +192,12 @@ class ScatterWidget(QWidget):
         self._tlo.LabelColors.notifyDirty(self._recolor)
         self._tlo.SelectEmbeddingSource.notifyDirty(self._request_umap_data)
 
+        def _maybe_update(*args, **kwargs):
+            if self._tlo.SelectEmbeddingSource.value == EmbeddingSource.Adapted:
+                self._request_umap_data()
+
+        self._tlo.AdaptedProjectorData.notifyDirty(_maybe_update)
+
     def showEvent(self, a0: QShowEvent) -> None:
         ret = super().showEvent(a0)
         self._request_umap_data()
@@ -594,6 +600,7 @@ class ObjectClassificationCollectionGui(LabelingGui["OpOCC"]):
         self.threadRouter = ThreadRouter(self)
         self._retained_weakrefs = []
         self.forceAtLeastTwoLabels(True)
+        self.topLevelOperatorView.AdaptionParameters.setValue(EFFORT_DICT[0])
 
     def initAppletDrawerUi(self):
         super().initAppletDrawerUi()
@@ -668,8 +675,6 @@ class ObjectClassificationCollectionGui(LabelingGui["OpOCC"]):
         slider_layout.addLayout(effort_labels_layout)
         grid_layout.addLayout(slider_layout, 1, 1, 1, 1)
         grid_layout.addWidget(btn, 2, 0, 1, 2)
-
-        self.topLevelOperatorView.AdaptionParameters.setValue(EFFORT_DICT[0])
 
         def cancel(*args):
             assert self._cancellation_token_source
