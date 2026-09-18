@@ -30,7 +30,7 @@ import numpy
 import pyqtgraph
 import volumina.colortables as colortables
 from qtpy.QtCore import QRectF, Qt, QThread, Signal
-from qtpy.QtGui import QAction, QBrush, QColor, QIcon, QMouseEvent
+from qtpy.QtGui import QAction, QBrush, QColor, QIcon, QMouseEvent, QShowEvent
 from qtpy.QtWidgets import (
     QButtonGroup,
     QCheckBox,
@@ -192,6 +192,11 @@ class ScatterWidget(QWidget):
         self._tlo.LabelColors.notifyDirty(self._recolor)
         self._tlo.SelectEmbeddingSource.notifyDirty(self._request_umap_data)
 
+    def showEvent(self, a0: QShowEvent) -> None:
+        ret = super().showEvent(a0)
+        self._request_umap_data()
+        return ret
+
     def _request_umap_data(self, *args, **kwargs):
 
         tlo = self._tlo
@@ -202,7 +207,14 @@ class ScatterWidget(QWidget):
 
             def run(self):
                 try:
-                    umap_result = numpy.array([(r.x, r.y) for r in tlo.UmapForDisplay.value.values()])
+                    # HACK: for now go deep
+                    if (
+                        tlo.SelectEmbeddingSource.value == EmbeddingSource.Adapted
+                        and not tlo.projector_cache.hasCacheValue()
+                    ):
+                        umap_result = None
+                    else:
+                        umap_result = numpy.array([(r.x, r.y) for r in tlo.UmapForDisplay.value.values()])
                     self.umapDone.emit(umap_result)
                 except Exception:
                     self.error.emit(traceback.format_exc())
@@ -214,11 +226,14 @@ class ScatterWidget(QWidget):
         t.error.connect(lambda x: logger.error(x))
         t.start()
 
-    def _update_embeddings(self, umap_result: numpy.ndarray):
-        x, y = umap_result[:, 0], umap_result[:, 1]
+    def _update_embeddings(self, umap_result: numpy.ndarray | None):
         if self.plot:
             self._graphics.removeItem(self.plot)
             self.plot = None
+        if umap_result is None:
+            return
+
+        x, y = umap_result[:, 0], umap_result[:, 1]
 
         self.scatter = pyqtgraph.ScatterPlotItem(
             x=x,
@@ -615,7 +630,18 @@ class ObjectClassificationCollectionGui(LabelingGui["OpOCC"]):
         self._button_group_umap_source = button_group_umap_source
         button_group_umap_source.buttonToggled.connect(self._update_embedding_source)
         button_group_umap_source.button(self.topLevelOperatorView.SelectEmbeddingSource.value).setChecked(True)
+        self._wants_adapted_embedding_checkbox = wants_adapted_embedding
+        self._wants_adapted_embedding_checkbox.setEnabled(False)
+        self._wants_original_embedding_checkbox = wants_original_embedding
 
+        def _update_chk(*args, **kwargs):
+            if self.topLevelOperatorView.projector_cache.hasCacheValue():
+                self._wants_adapted_embedding_checkbox.setEnabled(True)
+            else:
+                self._wants_adapted_embedding_checkbox.setEnabled(False)
+                self._wants_original_embedding_checkbox.setChecked(True)
+
+        self.topLevelOperatorView.FreezeProjector.notifyDirty(_update_chk)
         # self._labelControlUi.verticalLayout.addLayout(combo_layout_embedding)
 
         self._secondary_controls = EmbeddingWidget(mainOperator, self)
@@ -672,7 +698,6 @@ class ObjectClassificationCollectionGui(LabelingGui["OpOCC"]):
                     print(f"_fine_tuning {args=} {kwargs=}")
                     with valueContext(mainOperator.FreezeProjector, False):
                         _ = mainOperator.AdaptedProjectorData.value
-                        print(f"done {_=}")
 
             self._cancellation_token_source = CancellationTokenSource()
             token = self._cancellation_token_source.token
