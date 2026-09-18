@@ -48,7 +48,7 @@ class ObjectClassificationCollectionApplet(StandardApplet):
         multi_lane_gui = super().getMultiLaneGui()
         guis = multi_lane_gui.getGuis()
         for gui in guis:
-            if isinstance(gui, ObjectClassificationCollectionGui) and gui.labelListData.selectedIndex().row() < 0:
+            if isinstance(gui, ObjectClassificationCollectionGui) and not gui.isInitialized:
                 gui.selectLabel(0)
                 gui.isInitialized = True
         return multi_lane_gui

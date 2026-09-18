@@ -210,7 +210,7 @@ class ScatterWidget(QWidget):
                     # HACK: for now go deep
                     if (
                         tlo.SelectEmbeddingSource.value == EmbeddingSource.Adapted
-                        and not tlo.projector_cache.hasCacheValue()
+                        and not tlo.projector_cache._value is not None
                     ):
                         umap_result = None
                     else:
@@ -631,11 +631,11 @@ class ObjectClassificationCollectionGui(LabelingGui["OpOCC"]):
         button_group_umap_source.buttonToggled.connect(self._update_embedding_source)
         button_group_umap_source.button(self.topLevelOperatorView.SelectEmbeddingSource.value).setChecked(True)
         self._wants_adapted_embedding_checkbox = wants_adapted_embedding
-        self._wants_adapted_embedding_checkbox.setEnabled(False)
+        self._wants_adapted_embedding_checkbox.setEnabled(self.topLevelOperatorView.projector_cache._value is not None)
         self._wants_original_embedding_checkbox = wants_original_embedding
 
         def _update_chk(*args, **kwargs):
-            if self.topLevelOperatorView.projector_cache.hasCacheValue():
+            if self.topLevelOperatorView.projector_cache._value is not None:
                 self._wants_adapted_embedding_checkbox.setEnabled(True)
             else:
                 self._wants_adapted_embedding_checkbox.setEnabled(False)
