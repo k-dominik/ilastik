@@ -68,10 +68,11 @@ class OpFileListToGridReader(Operator):
         ]
         shapes: list[tuple[int, ...]] = [op.Output.meta.shape for op in reorders]
 
-        max_x = max(x[0] for x in shapes)
-        max_y = max(x[1] for x in shapes)
-        max_z = max(x[2] for x in shapes)
-        max_c = max(x[3] for x in shapes)
+        max_t = max(x[0] for x in shapes)
+        max_x = max(x[1] for x in shapes)
+        max_y = max(x[2] for x in shapes)
+        max_z = max(x[3] for x in shapes)
+        max_c = max(x[4] for x in shapes)
 
         def _get_data(slot):
             return slot[()].wait()
@@ -94,6 +95,7 @@ class OpFileListToGridReader(Operator):
             list(self._table.keys()),
             grid_size_cell_px=max(max_x, max_y),
             input_axis_keys=_OUTPUT_AXIS_KEYS,
+            max_t=max_t,
             max_z=max_z,
             n_c=max_c,
             margin=1,

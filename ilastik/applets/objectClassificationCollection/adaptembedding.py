@@ -190,6 +190,7 @@ class TwoViewDataset(torch.utils.data.Dataset):
             axistags.index("y"),
             axistags.index("x"),
             axistags.index("z"),
+            axistags.index("t"),
         )
         return torch.Tensor(arr_rgb.transpose(trans).squeeze()) / 255.0
 
