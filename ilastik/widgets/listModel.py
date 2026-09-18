@@ -123,7 +123,7 @@ class ListModel(QAbstractTableModel):
     def selectedIndex(self):
         row = self.selectedRow()
         if row >= 0:
-            return self.index(self.selectedRow())
+            return self.index(self.selectedRow(), 0)
         else:
             return QModelIndex()
 
