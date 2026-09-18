@@ -59,18 +59,16 @@ Notes:
   coordinated way (all slots that source Grid must be connected/disconnected)
 """
 
-from enum import IntEnum
-from itertools import islice
 import logging
-from math import ceil
 import random
+import warnings
+from enum import IntEnum
 from functools import partial
+from itertools import islice
+from math import ceil
 from threading import Lock
 from typing import TYPE_CHECKING, Any, Callable, Iterable, Optional, TypeVar, cast
-import warnings
 
-from ilastik.applets.objectFeatureCollection.types import EmbeddingTable, EmbeddingVector
-from lazyflow.operators.generic import OpSelectSubslot
 import numpy as np
 import numpy.typing as npt
 import torch
@@ -83,6 +81,7 @@ from sklearn.preprocessing import StandardScaler
 from ilastik.applets.fileCollection.fileCollectionOps import OpGrid, OpGridView
 from ilastik.applets.objectClassification.opObjectClassification import InvalidObjectIndex
 from ilastik.applets.objectClassificationCollection.adaptembedding import DinoV2Backbone, Projector, adapt_features
+from ilastik.applets.objectFeatureCollection.types import EmbeddingTable, EmbeddingVector
 from ilastik.config import runtime_cfg
 from lazyflow import USER_LOGLEVEL
 from lazyflow.base import ItemId
@@ -91,8 +90,9 @@ from lazyflow.classifiers.parallelVigraRfLazyflowClassifier import (
     ParallelVigraRfLazyflowClassifierFactory,
 )
 from lazyflow.operator import Operator
-from lazyflow.operators.ioOperators.types import FileList as FileListT, FileListDataRow
-from lazyflow.operators.ioOperators.types import RowBase
+from lazyflow.operators.generic import OpSelectSubslot
+from lazyflow.operators.ioOperators.types import FileList as FileListT
+from lazyflow.operators.ioOperators.types import FileListDataRow, RowBase
 from lazyflow.operators.opSlicedBlockedArrayCache import OpSlicedBlockedArrayCache
 from lazyflow.operators.valueProviders import OpValueCache
 from lazyflow.rtype import Index
@@ -101,7 +101,7 @@ from lazyflow.stype import Opaque
 from lazyflow.utility.grid import _OUTPUT_AXIS_KEYS, ImageGrid
 from lazyflow.utility.orderedSignal import OrderedSignal
 
-from .types import LabelRow, ProjectorData, UmapTable, UmapRow
+from .types import LabelRow, ProjectorData, UmapRow, UmapTable
 
 if TYPE_CHECKING:
     from lazyflow.graph import Graph
@@ -500,6 +500,7 @@ class OpUmap(Operator):
     ):
         super().__init__(parent=parent, graph=graph, write_logs=write_logs)
         self.Features.setOrConnectIfAvailable(Features)
+        self.progress_signal = OrderedSignal()
 
     def setupOutputs(self):
         self.Umap.meta.dtype = "object"
@@ -511,14 +512,17 @@ class OpUmap(Operator):
 
     def execute(self, slot, subindex, roi, result):
         assert slot == self.Umap
+        self.progress_signal(-1)
+        try:
+            features = self.Features.value
+            feature_vector = [f.embedding_vector for f in features.values()]
+            df_scaled = StandardScaler().fit_transform(feature_vector)
 
-        features = self.Features.value
-        feature_vector = [f.embedding_vector for f in features.values()]
-        df_scaled = StandardScaler().fit_transform(feature_vector)
-
-        reducer = umap.UMAP()
-        embedding = reducer.fit_transform(df_scaled)
-        return [{id: UmapRow(id=id, x=e[0], y=e[1]) for id, e in zip(features.keys(), embedding)}]
+            reducer = umap.UMAP()
+            embedding = reducer.fit_transform(df_scaled)
+            return [{id: UmapRow(id=id, x=e[0], y=e[1]) for id, e in zip(features.keys(), embedding)}]
+        finally:
+            self.progress_signal(100)
 
 
 _T = TypeVar("_T")
@@ -696,6 +700,32 @@ class OpLabelView(Operator):
         return self.op_grid.object_id_at(coordinate5d)
 
 
+class ProgressAggregator:
+    def __init__(self):
+        self._progress_signal = OrderedSignal()
+        self._signals: dict[OrderedSignal, float] = {}
+
+    def __call__(self, p: OrderedSignal, value: float):
+        self._signals[p] = value
+
+        if all(v == 100 for v in self._signals.values()):
+            self._progress_signal(100)
+            self._signals = {}
+        elif accumulated_progress := [x for x in self._signals.values() if x >= 0]:
+            self._progress_signal(sum(accumulated_progress) / len(self._signals))
+        elif any(x == -1 for x in self._signals.values()):
+            self._progress_signal(-1)
+        else:
+            print(list(self._signals.items()))
+
+    @property
+    def progress_signal(self):
+        return self._progress_signal
+
+    def subscribe_to(self, signal: OrderedSignal):
+        signal.subscribe(partial(self, signal))
+
+
 class OpOCC(Operator):
     name = "Object Classification for Image Collections"
     category = "object classification"
@@ -740,7 +770,8 @@ class OpOCC(Operator):
 
     def __init__(self, graph=None, parent=None):
         super().__init__(graph=graph, parent=parent)
-        self.progress_signal = OrderedSignal()
+        self._progress_aggregator = ProgressAggregator()
+        self.progress_signal = self._progress_aggregator.progress_signal
         self._got_lane = False
         self.op_grid = OpGrid(parent=self)
 
@@ -754,6 +785,7 @@ class OpOCC(Operator):
         self.GridLabels.connect(self.op_grid_label_view.GridLabels)
 
         self.op_umap = OpUmap(parent=self, Features=self.Embedding)
+        self._progress_aggregator.subscribe_to(self.op_umap.progress_signal)
         self.umap_cache = OpValueCache[UmapTable](parent=self)
         self.umap_cache.Input.connect(self.op_umap.Umap)
         self.Umap.connect(self.umap_cache.Output)
@@ -764,7 +796,7 @@ class OpOCC(Operator):
             Input=self.op_grid_labels.LabelTable,
             AdaptionParameters=self.AdaptionParameters,
         )
-        self.op_embedding_adapt.progress_signal.subscribe(self.progress_signal)
+        self._progress_aggregator.subscribe_to(self.op_embedding_adapt.progress_signal)
         self.projector_cache = OpValueCache[ProjectorData](parent=self)
         self.projector_cache.Input.connect(self.op_embedding_adapt.Projector)
         self.projector_cache.fixAtCurrent.connect(self.FreezeProjector)
@@ -773,6 +805,7 @@ class OpOCC(Operator):
         self.op_embedding = OpEmbedding(
             parent=self, Embedding=self.Embedding, FineTunedProjectorData=self.projector_cache.Output
         )
+        self._progress_aggregator.subscribe_to(self.op_embedding.progress_signal)
 
         self.embedding_cache = OpValueCache[EmbeddingTable](parent=self)
         self.embedding_cache.Input.connect(self.op_embedding.ProjectedEmbedding)
@@ -780,6 +813,7 @@ class OpOCC(Operator):
         self.AdaptedEmbeddings.connect(self.embedding_cache.Output)
 
         self.op_umap_adapted = OpUmap(parent=self, Features=self.embedding_cache.Output)
+        self._progress_aggregator.subscribe_to(self.op_umap_adapted.progress_signal)
         self.umap_adapted_cache = OpValueCache[UmapTable](parent=self)
         self.umap_adapted_cache.Input.connect(self.op_umap_adapted.Umap)
         self.AdaptedUmap.connect(self.umap_adapted_cache.Output)
