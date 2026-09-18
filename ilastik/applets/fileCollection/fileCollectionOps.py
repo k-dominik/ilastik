@@ -102,8 +102,6 @@ class OpGrid(Operator):
         self.Grid.meta.dtype = object
         self.Grid.meta.shape = (1,)
 
-        print(f"Grid: {self._grid.output_shape} {self._grid.output_axis_keys}")
-
     def execute(self, slot, subindex, roi, result):
         if slot == self.Grid:
             return [self._grid]
@@ -111,7 +109,6 @@ class OpGrid(Operator):
         raise ValueError(f"Wrong slot {slot.name} for this operator")
 
     def propagateDirty(self, slot, subindex, roi):
-        print("setting grid dirty")
         if slot == self.FileList:
             self.Grid.setDirty(())
         if slot == self.SubsetObjects:
