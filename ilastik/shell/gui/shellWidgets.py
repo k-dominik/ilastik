@@ -131,7 +131,7 @@ class MainControls(QSplitter):
         self.appletBar = AppletDrawerToolBox()
         appletbar_policy = QSizePolicy(QSizePolicy.Expanding, QSizePolicy.Maximum)
         appletbar_policy.setHorizontalStretch(0)
-        appletbar_policy.setVerticalStretch(6)
+        appletbar_policy.setVerticalStretch(8)
         self.appletBar.setSizePolicy(appletbar_policy)
 
         appletBar_pallette = QPalette()
