@@ -705,9 +705,9 @@ class ProgressAggregator:
         self._signals: dict[OrderedSignal, float] = {}
 
     def __call__(self, p: OrderedSignal, value: float):
-        self._signals[p] = value
+        self._signals[p] = min(value, 100)
 
-        if all(v == 100 for v in self._signals.values()):
+        if all(v >= 100 for v in self._signals.values()):
             self._progress_signal(100)
             self._signals = {}
         elif accumulated_progress := [x for x in self._signals.values() if x >= 0]:
