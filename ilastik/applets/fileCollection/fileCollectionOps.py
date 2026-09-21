@@ -21,6 +21,7 @@
 from dataclasses import dataclass
 from typing import Optional
 
+from lazyflow.utility.timer import timeLogged
 import numpy as np
 import vigra
 
@@ -30,6 +31,11 @@ from lazyflow.operators.ioOperators.opFileListToGridReader import FileListTableO
 from lazyflow.operators.ioOperators.types import FileList, FileListDataRow
 from lazyflow.slot import InputSlot, OutputSlot
 from lazyflow.utility.grid import _OUTPUT_AXIS_KEYS, ImageGrid
+
+import logging
+
+logger = logging.getLogger(__name__)
+
 
 FileListInputSlot = InputSlot[FileList]
 GridInputSlot = InputSlot[ImageGrid]
@@ -64,6 +70,7 @@ class OpGrid(Operator):
         self.SubsetObjects.setOrConnectIfAvailable(SubsetObjects)
         self._all_if_no_subselection = all_if_no_subselection
 
+    @timeLogged(logger=logger, level=logging.INFO, prefix="fileCollectionOps.OpGrid SetupOutputs")
     def setupOutputs(self):
         self._table = dict(self.FileList.value)
         sub_selection: list[ItemId] = []
