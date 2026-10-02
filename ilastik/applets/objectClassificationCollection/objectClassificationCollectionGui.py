@@ -377,6 +377,22 @@ class SimpleLabelView(LayerViewerGui["OpLabelView"]):
                 label_layer.colorTable = self._color_table
 
         self._labelColorsSlot.notifyDirty(_update_colors)
+        self._wants_fit = True
+
+        self.editor.shapeChanged.connect(self._fit)
+
+        def _ensure_auto_fit():
+            self._wants_fit = True
+
+        def _update_auto(scene_fully_visible):
+            self._wants_fit = scene_fully_visible
+
+        self.volumeEditorWidget.vpFit.connect(_ensure_auto_fit)
+        self.editor.hackImgIsFit.connect(_update_auto)
+
+    def _fit(self):
+        if self._wants_fit:
+            self.volumeEditorWidget._fitToScreen(emit=False)
 
     def setupLayers(self):
         layers = []
@@ -402,6 +418,16 @@ class SimpleLabelView(LayerViewerGui["OpLabelView"]):
             layers.append(raw_layer)
 
         return layers
+
+    def showEvent(self, event):
+        ret = super().showEvent(event)
+        self._fit()
+        return ret
+
+    def resizeEvent(self, a0) -> None:
+        ret = super().resizeEvent(a0)
+        self._fit()
+        return ret
 
 
 def has_labels(slot):
