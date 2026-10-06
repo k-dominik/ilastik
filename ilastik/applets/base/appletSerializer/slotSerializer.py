@@ -44,7 +44,7 @@ from pydantic import TypeAdapter
 
 from . import jsonSerializerRegistry
 from .legacyClassifiers import deserialize_classifier_factory, deserialize_classifier_type
-from .serializerUtils import deleteIfPresent, slicingToString, stringToSlicing
+from .serializerUtils import deleteIfPresent, slicingToString, stringToSlicing, dataclass_to_h5, dataclass_from_h5
 
 if TYPE_CHECKING:
     from ilastik.applets.objectClassificationCollection.opObjectClassificationCollection import OpGridLabels
@@ -54,64 +54,6 @@ logger = logging.getLogger(__name__)
 
 _T = TypeVar("_T")
 _PT = TypeVar("_PT", bound=RowBase)
-
-
-def ensure_encoded(val: str | bytes) -> bytes:
-    if isinstance(val, str):
-        val = val.encode("utf-8")
-
-    return val
-
-
-def encode_value(group, name, value):
-    if isinstance(value, str):
-        ds = group.create_dataset(name=name, data=ensure_encoded(value))
-        ds.attrs["__deserialize_type__"] = "str"
-    elif isinstance(value, int):
-        ds = group.create_dataset(name=name, data=value)
-        ds.attrs["__deserialize_type__"] = "int"
-    elif isinstance(value, float):
-        ds = group.create_dataset(name=name, data=value)
-        ds.attrs["__deserialize_type__"] = "float"
-    elif isinstance(value, np.ndarray):
-        ds = group.create_dataset(name=name, data=value, dtype=value.dtype)
-        ds.attrs["__deserialize_type__"] = "ndarray"
-        ds.attrs["__deserialize_dtype__"] = f"{value.dtype}"
-    else:
-        raise NotImplementedError(f"No serialization for {type(value)=} implemented.")
-
-
-def decode_value(group, name):
-    ds = group[name]
-    deserialize_type = ds.attrs["__deserialize_type__"]
-
-    if name == "id":
-        return ItemId(ds[()])
-
-    if deserialize_type == "str":
-        return ds[()].decode("utf-8")
-
-    if deserialize_type == "int":
-        return int(ds[()])
-    if deserialize_type == "float":
-        return float(ds[()])
-
-    if deserialize_type == "ndarray":
-        return ds[()].astype(ds.attrs["__deserialize_dtype__"])
-
-
-def dataclass_to_h5(basegroup, dataclass_obj):
-    for field in fields(dataclass_obj):
-        encode_value(
-            basegroup,
-            field.name,
-            getattr(dataclass_obj, field.name),
-        )
-
-
-def dataclass_from_h5(dataclass_cls, basegroup):
-    dc = {field.name: decode_value(basegroup, field.name) for field in fields(dataclass_cls)}
-    return dataclass_cls(**dc)
 
 
 class SerialSlot(Generic[_T]):

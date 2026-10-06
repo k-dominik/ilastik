@@ -1,9 +1,9 @@
 from collections import UserDict
-from typing import Callable
+from typing import Annotated, Callable
 
 import numpy.typing as npt
 import vigra
-from pydantic import ConfigDict
+from pydantic import BaseModel, ConfigDict, Field, PlainSerializer, ValidateAs
 from pydantic.dataclasses import dataclass
 
 from lazyflow.base import ItemId
@@ -19,9 +19,10 @@ class RowBase:
 class FileListDataRowNoId:
     filename: str
     shape: tuple[int, ...]
-    accessor: Callable[[], vigra.VigraArray]
     dtype: npt.DTypeLike
     axistags: str
+
+    accessor: Callable[[], vigra.VigraArray] = Field(exclude=True)
 
 
 @dataclass(config=ConfigDict(arbitrary_types_allowed=True))
@@ -53,3 +54,26 @@ class FileList(UserDict[ItemId, FileListDataRow]):
             dtype=item.dtype,
             axistags=item.axistags,
         )
+
+    def state(self):
+        return self._counter.state
+
+
+class _FileListS(BaseModel):
+    state: int
+    rows: list[FileListDataRow]
+
+
+def to_pydantic(f: FileList) -> _FileListS:
+    return _FileListS.model_validate(dict(state=f.state, keys=list(f.keys()), rows=list(f.values())))
+
+
+def from_pydantic(f: _FileListS) -> FileList:
+    return FileList(((row.id, row) for row in f.rows), f.state)
+
+
+FileListSerializer = Annotated[
+    FileList,
+    ValidateAs(_FileListS, from_pydantic),
+    PlainSerializer(to_pydantic),
+]

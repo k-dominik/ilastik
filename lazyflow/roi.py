@@ -25,7 +25,7 @@ import numbers
 from functools import partial
 from itertools import combinations
 from math import ceil, floor, log10, pow
-from typing import Sequence, Tuple, Union
+from typing import Any, Sequence, Tuple, TypeVar, Union
 
 import numpy
 
@@ -47,13 +47,19 @@ if __name__ == "__main__":
     sys.path.pop(0)
 
 
-class TinyVector(list):
+_T = TypeVar(
+    "T",
+    bound=int | float | numpy.integer[Any] | numpy.floating[Any],
+)
+
+
+class TinyVector(list[_T]):
     __slots__ = []
 
     def copy(self):
         return TinyVector(self)
 
-    def __add__(self, other):
+    def __add__(self, other: Iterable[_T] | _T):
         if isinstance(other, Iterable):
             return TinyVector(x + y for x, y in zip(self, other))
         else:
@@ -61,7 +67,7 @@ class TinyVector(list):
 
     __radd__ = __add__
 
-    def __iadd__(self, other):
+    def __iadd__(self, other: Iterable[_T] | _T):
         # Must explicitly override list.__iadd__
         # Others (e.g. isub, imul) can use default implementation.
         if isinstance(other, Iterable):
@@ -71,19 +77,19 @@ class TinyVector(list):
             self = TinyVector(x + other for x in self)
             return self
 
-    def __sub__(self, other):
+    def __sub__(self, other: Iterable[_T] | _T):
         if isinstance(other, Iterable):
             return TinyVector(x - y for x, y in zip(self, other))
         else:
             return TinyVector(x - other for x in self)
 
-    def __rsub__(self, other):
+    def __rsub__(self, other: Iterable[_T] | _T):
         if isinstance(other, Iterable):
             return TinyVector(y - x for x, y in zip(self, other))
         else:
             return TinyVector(other - x for x in self)
 
-    def __mul__(self, other):
+    def __mul__(self, other: Iterable[_T] | _T):
         if isinstance(other, Iterable):
             return TinyVector(x * y for x, y in zip(self, other))
         else:
@@ -91,91 +97,91 @@ class TinyVector(list):
 
     __rmul__ = __mul__
 
-    def __div__(self, other):
+    def __div__(self, other: Iterable[_T] | _T):
         if isinstance(other, Iterable):
             return TinyVector(x / y for x, y in zip(self, other))
         else:
             return TinyVector(x / other for x in self)
 
-    def __rdiv__(self, other):
+    def __rdiv__(self, other: Iterable[_T] | _T):
         if isinstance(other, Iterable):
             return TinyVector((y / x) for x, y in zip(self, other))
         else:
             return TinyVector((other / x) for x in self)
 
-    def __truediv__(self, other):
+    def __truediv__(self, other: Iterable[_T] | _T):
         if isinstance(other, Iterable):
             return TinyVector(x / y for x, y in zip(self, other))
         else:
             return TinyVector(x / other for x in self)
 
-    def __rtruediv__(self, other):
+    def __rtruediv__(self, other: Iterable[_T] | _T):
         if isinstance(other, Iterable):
             return TinyVector(y / x for x, y in zip(self, other))
         else:
             return TinyVector(other / x for x in self)
 
-    def __mod__(self, other):
+    def __mod__(self, other: Iterable[_T] | _T):
         if isinstance(other, Iterable):
             return TinyVector(x % y for x, y in zip(self, other))
         else:
             return TinyVector(x % other for x in self)
 
-    def __rmod__(self, other):
+    def __rmod__(self, other: Iterable[_T] | _T):
         if isinstance(other, Iterable):
             return TinyVector(y % x for x, y in zip(self, other))
         else:
             return TinyVector(other % x for x in self)
 
-    def __floordiv__(self, other):
+    def __floordiv__(self, other: Iterable[_T] | _T):
         if isinstance(other, Iterable):
             return TinyVector(x // y for x, y in zip(self, other))
         else:
             return TinyVector(x // other for x in self)
 
-    def __rfloordiv__(self, other):
+    def __rfloordiv__(self, other: Iterable[_T] | _T):
         if isinstance(other, Iterable):
             return TinyVector(y // x for x, y in zip(self, other))
         else:
             return TinyVector(other // x for x in self)
 
-    def __eq__(self, other):
+    def __eq__(self, other: Iterable[_T] | _T):
         if isinstance(other, Iterable):
             return TinyVector(x == y for x, y in zip(self, other))
         else:
             return TinyVector(x == other for x in self)
 
-    def __ne__(self, other):
+    def __ne__(self, other: Iterable[_T] | _T):
         if isinstance(other, Iterable):
             return TinyVector(x != y for x, y in zip(self, other))
         else:
             return TinyVector(x != other for x in self)
 
-    def __ge__(self, other):
+    def __ge__(self, other: Iterable[_T] | _T):
         if isinstance(other, Iterable):
             return TinyVector(x >= y for x, y in zip(self, other))
         else:
             return TinyVector(x >= other for x in self)
 
-    def __le__(self, other):
+    def __le__(self, other: Iterable[_T] | _T):
         if isinstance(other, Iterable):
             return TinyVector(x <= y for x, y in zip(self, other))
         else:
             return TinyVector(x <= other for x in self)
 
-    def __gt__(self, other):
+    def __gt__(self, other: Iterable[_T] | _T):
         if isinstance(other, Iterable):
             return TinyVector(x > y for x, y in zip(self, other))
         else:
             return TinyVector(x > other for x in self)
 
-    def __lt__(self, other):
+    def __lt__(self, other: Iterable[_T] | _T):
         if isinstance(other, Iterable):
             return TinyVector(x < y for x, y in zip(self, other))
         else:
             return TinyVector(x < other for x in self)
 
-    def __and__(self, other):
+    def __and__(self, other: Iterable[_T] | _T):
         if isinstance(other, Iterable):
             return TinyVector(x & y for x, y in zip(self, other))
         else:
@@ -183,7 +189,7 @@ class TinyVector(list):
 
     __rand__ = __and__
 
-    def __or__(self, other):
+    def __or__(self, other: Iterable[_T] | _T):
         if isinstance(other, Iterable):
             return TinyVector(x | y for x, y in zip(self, other))
         else:
@@ -191,7 +197,7 @@ class TinyVector(list):
 
     __ror__ = __or__
 
-    def __xor__(self, other):
+    def __xor__(self, other: Iterable[_T] | _T):
         if isinstance(other, Iterable):
             return TinyVector(x ^ y for x, y in zip(self, other))
         else:
@@ -222,7 +228,7 @@ class TinyVector(list):
     def _asint(self):
         return TinyVector([x.__int__() for x in self])
 
-    def insert(self, index, value):
+    def insert(self, index: int, value: _T):
         l = list(self)
         l.insert(index, value)
         return TinyVector(l)

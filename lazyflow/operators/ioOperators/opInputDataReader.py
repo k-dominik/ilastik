@@ -23,7 +23,8 @@ from pathlib import Path
 
 from lazyflow.graph import Operator, InputSlot, OutputSlot
 from lazyflow.operators import OpBlockedArrayCache, OpMetadataInjector, OpSubRegion
-from lazyflow.operators.ioOperators.opFileListToGridReader import FileListTableOutputSlot, OpFileListToGridReader
+from lazyflow.operators.ioOperators.opFileListToGridReader import OpFileListToGridReader
+from lazyflow.operators.ioOperators.types import FileList
 from .opNpyFileReader import OpNpyFileReader
 from lazyflow.operators.ioOperators import (
     OpBlockwiseFilesetReader,
@@ -69,9 +70,12 @@ import vigra
 import os
 import re
 import logging
-from typing import Tuple, Optional
+from typing import TYPE_CHECKING, Tuple, Optional
 
 from lazyflow.utility.io_util.multiprocessHdf5File import MultiProcessHdf5File
+
+if TYPE_CHECKING:
+    from lazyflow.operators.ioOperators.types import FileList as FileListT
 
 
 class OpInputDataReader(Operator):
@@ -121,12 +125,13 @@ class OpInputDataReader(Operator):
     FilePath = InputSlot(stype="filestring")
     SequenceAxis = InputSlot(optional=True)
     ActiveScale = InputSlot(optional=True)  # Only relevant for multiscale data
+    FileList = InputSlot["FileListT"](optional=True)
 
     # FIXME: Document this.
     SubVolumeRoi = InputSlot(optional=True)  # (start, stop)
 
     Output = OutputSlot()
-    FileListTable = FileListTableOutputSlot(stype="object")
+    FileListTable = OutputSlot["FileListT"](stype="object")
 
     loggingName = __name__ + ".OpInputDataReader"
     logger = logging.getLogger(loggingName)
@@ -141,7 +146,7 @@ class OpInputDataReader(Operator):
         SequenceAxis: Optional[str] = None,
         SubVolumeRoi: Optional[Tuple[int, int]] = None,
         ActiveScale: Optional[str] = None,
-        *args,
+        FileList: Optional["FileListT"] = None * args,
         **kwargs,
     ):
         super(OpInputDataReader, self).__init__(*args, **kwargs)
@@ -154,6 +159,7 @@ class OpInputDataReader(Operator):
         self.SequenceAxis.setOrConnectIfAvailable(SequenceAxis)
         self.SubVolumeRoi.setOrConnectIfAvailable(SubVolumeRoi)
         self.ActiveScale.setOrConnectIfAvailable(ActiveScale)
+        self.FileList.setOrConnectIfAvailable(FileList)
 
     def cleanUp(self):
         super(OpInputDataReader, self).cleanUp()
@@ -257,9 +263,9 @@ class OpInputDataReader(Operator):
         self.Output.connect(self.opInjector.Output)
 
     def _attemptOpenAsGrid(self, filepath):
-        if self.SequenceAxis.ready() and self.SequenceAxis.value == "grid":
-            opReader = OpFileListToGridReader(parent=self)
-            opReader.FileList.setValue(filepath)
+        if self.SequenceAxis.ready() and self.SequenceAxis.value == "grid" and self.FileList.ready():
+            opReader = OpFileListToGridReader(parent=self, FileList=self.FileList)
+
             return [opReader], opReader.Output
 
         return ([], None)

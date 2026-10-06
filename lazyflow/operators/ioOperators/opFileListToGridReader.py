@@ -2,15 +2,16 @@ import logging
 import os
 from dataclasses import fields
 from functools import partial
-from typing import Any, Callable, Final
+from typing import Any, Callable, Final, Optional
 
 from lazyflow.base import ItemId
 from lazyflow.operators.opReorderAxes import OpReorderAxes
+from lazyflow.slot import Slot
 from lazyflow.utility.grid import ImageGrid
 
 from .ioOperators import OpImageReader
 from .opTiffReader import OpTiffReader
-from .types import FileList, FileListDataRowNoId
+from .types import FileList as FileListT, FileListDataRowNoId
 
 logger = logging.getLogger(__name__)
 
@@ -34,23 +35,20 @@ def as_shallow_dict(ds) -> dict[str, Any]:
     return {f.name: getattr(ds, f.name) for f in fields(ds)}
 
 
-StrSlot = InputSlot[str]
-FileListTableOutputSlot = OutputSlot[FileList]
-
-
 class OpFileListToGridReader(Operator):
-    FileList = StrSlot()
+    FileList = InputSlot[FileListT]()
 
-    FileListTable = FileListTableOutputSlot()
+    FileListTable = OutputSlot[FileList]()
     Output = OutputSlot()
 
     # How many pixels around the images to add to the grid
     MARGIN = 1
 
-    def __init__(self, *args, **kwargs):
+    def __init__(self, FileList: Optional[Slot[FileListT]] * args, **kwargs):
         super().__init__(*args, **kwargs)
         self._files_table = None
         self._internal_operators = None
+        self.FileList.setOrConnectIfAvailable(FileList)
 
     def setupOutputs(self):
 

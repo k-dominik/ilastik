@@ -32,6 +32,7 @@ from pathlib import Path
 from typing import List, Literal, Tuple, Dict, Optional, Union, Callable, Set
 
 import h5py
+from lazyflow.operators.ioOperators.types import FileList
 import numpy
 import vigra
 import z5py
@@ -55,6 +56,7 @@ from lazyflow.operators.opReorderAxes import OpReorderAxes
 from lazyflow.utility.helpers import get_default_axisordering, eq_shapes
 from lazyflow.utility.io_util.multiscaleStore import DEFAULT_SCALE_KEY, Multiscale
 from lazyflow.utility.pathHelpers import splitPath, globH5N5, globNpz, PathComponents, uri_to_Path
+from pydantic import TypeAdapter
 
 
 def getTypeRange(numpy_type):
@@ -834,6 +836,68 @@ class RelativeFilesystemDatasetInfo(FilesystemDatasetInfo):
     @property
     def effective_path(self) -> str:
         return os.path.pathsep.join(str(Path(p).relative_to(self.base_dir)) for p in self.expanded_paths)
+
+
+class GridDatasetInfo(DatasetInfo):
+    def __init__(
+        self,
+        *,
+        fileListTable: FileList,
+        laneShape: Tuple,
+        laneDtype: type,
+        default_tags: AxisTags,
+        axistags: AxisTags = None,
+        scales: Multiscale = None,
+        allowLabels: bool = True,
+        subvolume_roi: Tuple = None,
+        display_mode: str = "default",
+        nickname: str = "",
+        project_file: h5py.File = None,
+        normalizeDisplay: bool = None,
+        drange: Tuple[Number, Number] = None,
+        working_scale: str = DEFAULT_SCALE_KEY,
+        scale_locked: bool = False,
+        axis_units: Dict[str, str] = None,
+    ):
+        super().__init__(
+            laneShape=laneShape,
+            laneDtype=laneDtype,
+            default_tags=default_tags,
+            axistags=axistags,
+            scales=scales,
+            allowLabels=allowLabels,
+            subvolume_roi=subvolume_roi,
+            display_mode=display_mode,
+            nickname=nickname,
+            project_file=project_file,
+            normalizeDisplay=normalizeDisplay,
+            drange=drange,
+            working_scale=working_scale,
+            scale_locked=scale_locked,
+            axis_units=axis_units,
+        )
+
+        self._file_list_table = fileListTable
+        self._type_adapter = TypeAdapter(FileList)
+
+    def to_json_data(self) -> Dict:
+        js = super().to_json_data()
+        js["fileListTable"] = self._type_adapter.dump_python(self._file_list_table)
+        return js
+
+    @classmethod
+    def from_h5_group(cls, data: h5py.Group, params: Dict = None):
+        params = params or {}
+        
+        params["url"] = self._type_adapter.validate_python(group["fileListTable"])
+        return super().from_h5_group(data, params=params)
+
+    def effective_path(self) -> str:
+        return f"Grid {len(self._file_list_table)}: {next(iter(self._file_list_table.values()))} ..."
+
+    def create_data_reader(self, parent: Optional[Operator] = None, graph: Optional[Graph] = None) -> OutputSlot:
+        op_reader = 
+
 
 
 class OpDataSelection(Operator):

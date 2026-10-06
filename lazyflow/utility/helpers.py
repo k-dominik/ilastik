@@ -193,3 +193,7 @@ class TrueInc:
         with self._lock:
             if self._count < item_id:
                 self._count = item_id
+
+    @property
+    def state(self) -> int:
+        return self._count

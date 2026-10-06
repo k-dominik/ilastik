@@ -35,6 +35,7 @@ from collections import OrderedDict
 logger = logging.getLogger(__name__)
 traceLogger = logging.getLogger("TRACE." + __name__)
 
+from lazyflow.rtype import SubRegion
 import psutil
 
 import numpy
@@ -44,6 +45,7 @@ from lazyflow.graph import OrderedSignal, Operator, OutputSlot, InputSlot
 from lazyflow.roi import roiToSlice, roiFromShape, determineBlockShape
 from lazyflow.utility.bigRequestStreamer import BigRequestStreamer
 from lazyflow.utility.helpers import bigintprod
+from .functional.imageReader import determine_metadata, read_roi
 
 
 class OpImageReader(Operator):
@@ -52,7 +54,7 @@ class OpImageReader(Operator):
     Supports 2D images (output as xyc) and also multi-page tiffs (output as zyxc).
     """
 
-    Filename = InputSlot(stype="filestring")
+    Filename = InputSlot[str](stype="filestring")
     Image = OutputSlot()
 
     def __init__(self, graph=None, parent=None, Filename=None):
@@ -61,51 +63,15 @@ class OpImageReader(Operator):
 
     def setupOutputs(self):
         filename = self.Filename.value
+        self._meta = determine_metadata(filename)
+        self.Image.meta.dtype = self._meta.dtype
+        self.Image.meta.prefer_2d = self._meta.prefer_2d
+        self.Image.meta.shape = self._meta.shape
+        self.Image.meta.axistags = self._meta.axistags
 
-        info = vigra.impex.ImageInfo(filename)
-        assert [tag.key for tag in info.getAxisTags()] == ["x", "y", "c"]
-
-        shape_xyc = info.getShape()
-        shape_yxc = (shape_xyc[1], shape_xyc[0], shape_xyc[2])
-
-        self.Image.meta.dtype = info.getDtype()
-        self.Image.meta.prefer_2d = True
-
-        numImages = vigra.impex.numberImages(filename)
-        if numImages == 1:
-            # For 2D, we use order yxc.
-            self.Image.meta.shape = shape_yxc
-            v_tags = info.getAxisTags()
-            self.Image.meta.axistags = vigra.AxisTags([v_tags[k] for k in "yxc"])
-        else:
-            # For 3D, we use zyxc
-            # Insert z-axis shape
-            shape_zyxc = (numImages,) + shape_yxc
-            self.Image.meta.shape = shape_zyxc
-
-            # Insert z tag
-            z_tag = vigra.defaultAxistags("z")[0]
-            tags_xyc = [tag for tag in info.getAxisTags()]
-            tags_zyxc = [z_tag] + list(reversed(tags_xyc[:-1])) + tags_xyc[-1:]
-            self.Image.meta.axistags = vigra.AxisTags(tags_zyxc)
-
-    def execute(self, slot, subindex, rroi, result):
+    def execute(self, slot, subindex, rroi: SubRegion, result):
         filename = self.Filename.value
-
-        if "z" in self.Image.meta.getAxisKeys():
-            # Copy from each image slice into the corresponding slice of the result.
-            roi_zyxc = numpy.array([rroi.start, rroi.stop])
-            for z_global, z_result in zip(list(range(*roi_zyxc[:, 0])), list(range(result.shape[0]))):
-                full_slice = vigra.impex.readImage(filename, index=z_global)
-                full_slice = full_slice.transpose(1, 0, 2)  # xyc -> yxc
-                assert full_slice.shape == self.Image.meta.shape[1:]
-                result[z_result] = full_slice[roiToSlice(*roi_zyxc[:, 1:])]
-        else:
-            full_slice = vigra.impex.readImage(filename).transpose(1, 0, 2)  # xyc -> yxc
-            assert full_slice.shape == self.Image.meta.shape
-            roi_yxc = numpy.array([rroi.start, rroi.stop])
-            result[:] = full_slice[roiToSlice(*roi_yxc)]
-        return result
+        return read_roi(filename, meta=self._meta, roi=rroi, result=result)
 
     def propagateDirty(self, slot, subindex, roi):
         if slot == self.Filename:
