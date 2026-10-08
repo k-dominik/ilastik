@@ -97,7 +97,7 @@ from lazyflow.operators.valueProviders import OpValueCache
 from lazyflow.rtype import Index
 from lazyflow.slot import InputSlot, OutputSlot, Slot
 from lazyflow.stype import Opaque
-from lazyflow.utility.grid import _OUTPUT_AXIS_KEYS, ImageGrid
+from lazyflow.utility.grid import OUTPUT_AXIS_KEYS, ImageGrid
 from lazyflow.utility.orderedSignal import OrderedSignal
 
 from .types import LabelRow, ProjectorData, UmapRow, UmapTable
@@ -377,7 +377,6 @@ class OpObjectCollectionTrain(Operator):
         self.Classifier.setDirty(())
 
 
-@dataclass
 class PredictionRow(RowBase):
     prediction: int
     probabilities: tuple[float, ...]
@@ -923,7 +922,7 @@ class OpOCC(Operator):
         )
 
     def setupOutputs(self):
-        axisOrder = _OUTPUT_AXIS_KEYS
+        axisOrder = OUTPUT_AXIS_KEYS
         blockDimsX = {"t": (1, 1), "z": (512, 512), "y": (512, 512), "x": (1, 1), "c": (100, 100)}
         blockDimsY = {"t": (1, 1), "z": (512, 512), "y": (1, 1), "x": (512, 512), "c": (100, 100)}
         blockDimsZ = {"t": (1, 1), "z": (1, 1), "y": (512, 512), "x": (512, 512), "c": (100, 100)}

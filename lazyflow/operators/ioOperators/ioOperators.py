@@ -64,14 +64,18 @@ class OpImageReader(Operator):
     def setupOutputs(self):
         filename = self.Filename.value
         self._meta = determine_metadata(filename)
+
         self.Image.meta.dtype = self._meta.dtype
-        self.Image.meta.prefer_2d = self._meta.prefer_2d
         self.Image.meta.shape = self._meta.shape
         self.Image.meta.axistags = self._meta.axistags
+        self.Image.meta.prefer_2d = True
+
+        keys = self.Image.meta.axistags.keys()
+        if "z" in keys and self.Image.meta.shape[keys.index("z")] > 1:
+            self.Image.meta.prefer_2d = False
 
     def execute(self, slot, subindex, rroi: SubRegion, result):
-        filename = self.Filename.value
-        return read_roi(filename, meta=self._meta, roi=rroi, result=result)
+        return read_roi(meta=self._meta, roi=rroi, result=result)
 
     def propagateDirty(self, slot, subindex, roi):
         if slot == self.Filename:

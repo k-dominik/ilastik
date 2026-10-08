@@ -21,26 +21,21 @@
 from dataclasses import dataclass
 from typing import Optional
 
+
+from lazyflow.graph import Graph
 from lazyflow.utility.timer import timeLogged
 import numpy as np
 import vigra
 
 from lazyflow.base import ItemId
 from lazyflow.operator import Operator
-from lazyflow.operators.ioOperators.opFileListToGridReader import FileListTableOutputSlot
-from lazyflow.operators.ioOperators.types import FileList, FileListDataRow
-from lazyflow.slot import InputSlot, OutputSlot
-from lazyflow.utility.grid import _OUTPUT_AXIS_KEYS, ImageGrid
+from lazyflow.operators.ioOperators.types import FileList as FileListT, FileListDataRow
+from lazyflow.slot import InputSlot, OutputSlot, Slot
+from lazyflow.utility.grid import OUTPUT_AXIS_KEYS, ImageGrid
 
 import logging
 
 logger = logging.getLogger(__name__)
-
-
-FileListInputSlot = InputSlot[FileList]
-GridInputSlot = InputSlot[ImageGrid]
-GridOutputSlot = OutputSlot[ImageGrid]
-ObjectIdsInputslot = InputSlot[list[ItemId]]
 
 
 @dataclass
@@ -50,19 +45,19 @@ class SimpleRoi:
 
 
 class OpGrid(Operator):
-    FileList = FileListInputSlot()
-    SubsetObjects = ObjectIdsInputslot(optional=True)
+    FileList = InputSlot[FileListT]()
+    SubsetObjects = InputSlot[list[ItemId]](optional=True)
 
-    Grid = GridOutputSlot(stype="object")
+    Grid = OutputSlot[ImageGrid](stype="object")
 
     MARGIN = 1
 
     def __init__(
         self,
-        graph=None,
-        parent=None,
-        FileList=None,
-        SubsetObjects=None,
+        graph: Optional[Graph] = None,
+        parent: Optional[Operator] = None,
+        FileList: Optional[Slot[FileListT]] = None,
+        SubsetObjects: Optional[Slot[list[ItemId]]] = None,
         all_if_no_subselection: bool = True,
     ):
         super().__init__(graph=graph, parent=parent)
@@ -98,7 +93,7 @@ class OpGrid(Operator):
         self._grid = ImageGrid(
             list(self._table.keys()),
             grid_size_cell_px=max(max_x, max_y),
-            input_axis_keys=_OUTPUT_AXIS_KEYS,
+            input_axis_keys=OUTPUT_AXIS_KEYS,
             max_t=max_t,
             max_z=max_z,
             n_c=max_c,
@@ -140,16 +135,16 @@ class OpGrid(Operator):
 
 
 class OpGridView(Operator):
-    FileList = FileListInputSlot()
-    Grid = GridInputSlot(stype="object")
+    FileList = InputSlot[FileListT]()
+    Grid = InputSlot[ImageGrid](stype="object")
     Output = OutputSlot()
 
     def __init__(
         self,
-        parent=None,
-        graph=None,
-        FileList: Optional[FileListInputSlot | FileListTableOutputSlot] = None,
-        Grid: Optional[GridInputSlot | GridOutputSlot] = None,
+        graph: Optional[Graph] = None,
+        parent: Optional[Operator] = None,
+        FileList: Optional[Slot[FileListT]] = None,
+        Grid: Optional[Slot[ImageGrid]] = None,
     ):
         super().__init__(parent=parent, graph=graph)
         self.FileList.setOrConnectIfAvailable(FileList)
@@ -200,7 +195,7 @@ class OpGridView(Operator):
 
     def _load_image(self, item_id: ItemId) -> vigra.VigraArray | None:
         try:
-            return vigra.taggedView(self._table[item_id].accessor(), "".join(_OUTPUT_AXIS_KEYS))
+            return vigra.taggedView(self._table[item_id].accessor(), "".join(OUTPUT_AXIS_KEYS))
         except IndexError:
             print(f"Warning: didn't find image for {item_id=}")
             return None

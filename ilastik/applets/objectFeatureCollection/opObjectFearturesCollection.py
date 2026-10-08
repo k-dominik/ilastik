@@ -22,7 +22,7 @@ from typing import TYPE_CHECKING, Optional
 
 from ilastik.applets.objectFeatureCollection.types import EmbeddingTable
 
-from ilastik.applets.fileCollection.fileCollectionOps import FileList as FileListT
+from lazyflow.operators.ioOperators.types import FileList as FileListT
 from ilastik.applets.fileCollection.fileCollectionOps import OpGrid, OpGridView
 from ilastik.plugins import plugin_manager
 from lazyflow.operator import InputSlot, Operator, OutputSlot, Slot

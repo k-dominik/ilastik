@@ -33,7 +33,7 @@ from lazyflow.base import Axiskey
 Array5D = npt.NDArray[np.floating | np.integer]
 
 # using volumina order: (time, x,y,z, channels)
-_OUTPUT_AXIS_KEYS: Final = ("t", "x", "y", "z", "c")
+OUTPUT_AXIS_KEYS: Final = ("t", "x", "y", "z", "c")
 
 
 class RoiLike(Protocol):
@@ -68,7 +68,7 @@ class ImageGridCell:
         additional_margin: int = 0,
     ) -> Array5D:
         """Data that can be written into an array that"""
-        grid_data = vigra.taggedView(np.zeros(self._grid_cell_full_shape, dtype=dtype), "".join(_OUTPUT_AXIS_KEYS))
+        grid_data = vigra.taggedView(np.zeros(self._grid_cell_full_shape, dtype=dtype), "".join(OUTPUT_AXIS_KEYS))
         if fill_value is not None:
             m = self._margin + additional_margin
             grid_data[:, m:-m, m:-m, :, :] = fill_value
@@ -76,7 +76,7 @@ class ImageGridCell:
         st, sx, sy, sz, sc = self._grid_cell_full_shape
 
         if image_data is not None:
-            image_data5d = image_data.withAxes(_OUTPUT_AXIS_KEYS)
+            image_data5d = image_data.withAxes(OUTPUT_AXIS_KEYS)
             it, ix, iy, iz, ic = image_data5d.shape
             assert sc == ic, f"Expect Image {ic=} to have the same number of channels as grid {sc=}"
             assert st == it, f"Expect Image {st=} to have the same number of channels as grid {it=}"
@@ -170,7 +170,7 @@ class ImageGrid:
         self.input_axis_keys = tuple(input_axis_keys)
         self.output_shape = shape
         self._cell_shape = (int(max_t), self.grid_size_cell_px, self.grid_size_cell_px, int(max_z), int(n_c))
-        self.output_axis_keys = _OUTPUT_AXIS_KEYS
+        self.output_axis_keys = OUTPUT_AXIS_KEYS
 
     def grid_cells_per_roi(self, roi: RoiLike) -> Iterator[ImageGridCell]:
         t_start, x_start, y_start, z_start, c_start = roi.start

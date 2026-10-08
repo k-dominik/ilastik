@@ -25,6 +25,7 @@ from math import ceil
 from threading import RLock
 from typing import Callable, Iterable, Literal, Optional, TypeVar
 
+from lazyflow.operators.ioOperators.types import FileList
 import numpy as np
 import numpy.typing as npt
 import torch
@@ -36,11 +37,9 @@ from ilastik.config import runtime_cfg
 from ilastik.plugins import ObjectFeaturesPlugin
 from ilastik.plugins.types import FeatureDescription, FloatArray, PartialFeatureDict, PluginInfo
 from lazyflow.base import ItemId
-from lazyflow.operators.ioOperators.opFileListToGridReader import FileList
-from lazyflow.utility.grid import _OUTPUT_AXIS_KEYS
+from lazyflow.utility.grid import OUTPUT_AXIS_KEYS
 
 T = TypeVar("T")
-
 
 logger = logging.getLogger(__name__)
 
@@ -205,7 +204,7 @@ class DinoBase(ObjectFeaturesPlugin):
 
     @staticmethod
     def _ensure_rgb(
-        image_array: npt.NDArray[np.uint8], axistags: tuple[str, ...] = _OUTPUT_AXIS_KEYS
+        image_array: npt.NDArray[np.uint8], axistags: tuple[str, ...] = OUTPUT_AXIS_KEYS
     ) -> npt.NDArray[np.float32]:
         tagged_shape = dict(zip(axistags, image_array.shape))
         if any(s for s, v in tagged_shape.items() if s not in "xyc" and v > 1):

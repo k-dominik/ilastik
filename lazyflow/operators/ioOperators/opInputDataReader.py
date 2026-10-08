@@ -146,7 +146,8 @@ class OpInputDataReader(Operator):
         SequenceAxis: Optional[str] = None,
         SubVolumeRoi: Optional[Tuple[int, int]] = None,
         ActiveScale: Optional[str] = None,
-        FileList: Optional["FileListT"] = None * args,
+        FileList: Optional["FileListT"] = None,
+        *args,
         **kwargs,
     ):
         super(OpInputDataReader, self).__init__(*args, **kwargs)

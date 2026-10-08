@@ -18,6 +18,7 @@
 # on the ilastik web site at:
 # 		   http://ilastik.org/license.html
 ###############################################################################
+from dataclasses import asdict, dataclass, fields
 from enum import IntEnum
 import itertools
 import logging
@@ -25,7 +26,7 @@ import os
 import threading
 from functools import partial
 from pathlib import Path
-from typing import TYPE_CHECKING, Dict, List, Set, Union, Optional
+from typing import TYPE_CHECKING, Any, Callable, Dict, List, Set, Union, Optional
 
 import h5py
 from qtpy import uic
@@ -33,6 +34,9 @@ from qtpy.QtWidgets import QCheckBox, QDialog, QMessageBox, QStackedWidget, QWid
 from qtpy.QtCore import Qt
 from vigra import AxisTags
 
+from lazyflow.operators.ioOperators.functional import imageReader as f_imageReader
+from lazyflow.operators.ioOperators.types import FileList, FileListDataRowNoId
+from lazyflow.utility.grid import OUTPUT_AXIS_KEYS
 from volumina.utility import preferences
 
 from ilastik.applets.base.applet import DatasetConstraintError
@@ -51,15 +55,18 @@ from .datasetDetailedInfoTableView import DatasetDetailedInfoTableView
 from .datasetInfoEditorWidget import DatasetInfoEditorWidget
 from .opDataSelection import (
     DatasetInfo,
+    GridDatasetInfo,
     ProjectInternalDatasetInfo,
     MultiscaleUrlDatasetInfo,
 )
 from .multiscaleDatasetBrowser import MultiscaleDatasetBrowser
 
 if TYPE_CHECKING:
+    from .opDataSelection import OpMultiLaneDataSelectionGroup
     from ilastik.applets.dataSelection.dataSelectionApplet import DataSelectionApplet
     from ilastik.applets.dataSelection.dataSelectionSerializer import DataSelectionSerializer
-    from .opDataSelection import OpMultiLaneDataSelectionGroup
+    from lazyflow.operators.ioOperators.functional.imageReader import ImageMeta
+    import vigra
 
 logger = logging.getLogger(__name__)
 
@@ -698,7 +705,35 @@ class DataSelectionGui(QWidget):
                 "(For HDF5 files, be sure to enable chunking on your dataset.)",
             )
 
-    def addStack(self, roleIndex, laneIndex):
+    def _check_image_grid(self, files: list[str]) -> FileList:
+        supported_suffixes = [".png", ".jpeg", ".jpg"]
+
+        @dataclass
+        class ReaderFunctions:
+            read_meta: Callable[[str], "ImageMeta"]
+
+        if not all(Path(x).suffix.lower() in supported_suffixes for x in files):
+            raise ValueError(
+                f"Unsupported files found: {[x for x in files if Path(x).suffix.lower() not in supported_suffixes][0:5]}.... "
+                f"Currently the only supported types are {supported_suffixes}. "
+                f"Please get in touch with the ilastik team if you need support for other files."
+            )
+
+        reader_lookup = {
+            ".jpg": ReaderFunctions(read_meta=f_imageReader.determine_metadata),
+            ".jpeg": ReaderFunctions(read_meta=f_imageReader.determine_metadata),
+            ".png": ReaderFunctions(read_meta=f_imageReader.determine_metadata),
+        }
+        meta = [reader_lookup[Path(f).suffix.lower()].read_meta(f) for f in files]
+        file_list = FileList()
+        # populate
+        [
+            file_list.add_no_id(FileListDataRowNoId.from_image_meta_with_axes(m, axisorder=OUTPUT_AXIS_KEYS))
+            for m in meta
+        ]
+        return file_list
+
+    def addStack(self, roleIndex: int, laneIndex: int):
         """
         The user clicked the "Import Stack Files" button.
         """
@@ -707,13 +742,18 @@ class DataSelectionGui(QWidget):
         if stackDlg.result() != QDialog.Accepted or not stackDlg.selectedFiles:
             return
 
+        if stackDlg.sequence_axis == "grid":
+            file_list = self._check_image_grid(stackDlg.selectedFiles)
+
+            stack_info = GridDatasetInfo.from_file_list(file_list=file_list)
+            self.addLanes([stack_info], roleIndex, laneIndex)
+            return
+
         # FIXME: ask first if stack should be internalized to project file
         # also, check prefer_2d, size/volume and presence of 'z' to determine this
         url = os.path.pathsep.join(stackDlg.selectedFiles)
         stack_info = self.instantiate_dataset_info(url=url, role=roleIndex, sequence_axis=stackDlg.sequence_axis)
-        if stackDlg.sequence_axis == "grid":
-            self.addLanes([stack_info], roleIndex, laneIndex)
-            return
+
         try:
             # FIXME: do this inside a Request
             self.parentApplet.busy = True

@@ -30,7 +30,6 @@ from lazyflow.operators.ioOperators.types import RowBase
 from torch import Tensor, from_numpy
 
 
-@dataclass(config=ConfigDict(arbitrary_types_allowed=True))
 class LabelRow(RowBase):
     label: int
 
@@ -41,7 +40,6 @@ class AdaptionParameters:
     labeled_fraction: float
 
 
-@dataclass
 class UmapRow(RowBase):
     x: float
     y: float

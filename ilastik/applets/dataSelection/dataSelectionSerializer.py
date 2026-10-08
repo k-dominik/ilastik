@@ -33,6 +33,7 @@ from lazyflow.utility.pathHelpers import getPathVariants, isUrl, isRelative
 from lazyflow.utility.timer import timeLogged
 from .opDataSelection import (
     FilesystemDatasetInfo,
+    GridDatasetInfo,
     RelativeFilesystemDatasetInfo,
     DummyDatasetInfo,
     MultiscaleUrlDatasetInfo,
@@ -77,6 +78,7 @@ class DataSelectionSerializer(AppletSerializer):
             RelativeFilesystemDatasetInfo,
             MultiscaleUrlDatasetInfo,
             UrlDatasetInfo,
+            GridDatasetInfo,
         ]
     }
 

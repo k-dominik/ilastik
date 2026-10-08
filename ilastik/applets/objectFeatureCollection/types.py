@@ -29,7 +29,6 @@ from lazyflow.base import ItemId
 from lazyflow.operators.ioOperators.types import RowBase
 
 
-@dataclass(config=ConfigDict(arbitrary_types_allowed=True))
 class EmbeddingVector(RowBase):
     embedding_vector: npt.NDArray[np.floating]
 

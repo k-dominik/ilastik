@@ -32,7 +32,7 @@ from pathlib import Path
 from typing import List, Literal, Tuple, Dict, Optional, Union, Callable, Set
 
 import h5py
-from lazyflow.operators.ioOperators.types import FileList
+from lazyflow.operators.ioOperators.types import FileList, FileListSerializer
 import numpy
 import vigra
 import z5py
@@ -50,7 +50,7 @@ from lazyflow.operators import OpMissingDataSource
 from lazyflow.operators.ioOperators import OpH5N5WriterBigDataset
 from lazyflow.operators.ioOperators import OpInputDataReader
 from lazyflow.operators.ioOperators import OpStreamingH5N5Reader
-from lazyflow.operators.ioOperators.opFileListToGridReader import FileListTableOutputSlot
+from lazyflow.operators.ioOperators.opFileListToGridReader import determine_grid_shape
 from lazyflow.operators.opArrayPiper import OpArrayPiper
 from lazyflow.operators.opReorderAxes import OpReorderAxes
 from lazyflow.utility.helpers import get_default_axisordering, eq_shapes
@@ -859,6 +859,7 @@ class GridDatasetInfo(DatasetInfo):
         scale_locked: bool = False,
         axis_units: Dict[str, str] = None,
     ):
+        nickname = nickname or f"grid_{len(fileListTable)}_{next(iter(fileListTable.values())).filename}"
         super().__init__(
             laneShape=laneShape,
             laneDtype=laneDtype,
@@ -878,26 +879,56 @@ class GridDatasetInfo(DatasetInfo):
         )
 
         self._file_list_table = fileListTable
-        self._type_adapter = TypeAdapter(FileList)
 
     def to_json_data(self) -> Dict:
+        _type_adapter = TypeAdapter(FileListSerializer)
         js = super().to_json_data()
-        js["fileListTable"] = self._type_adapter.dump_python(self._file_list_table)
+        js["fileListTable"] = _type_adapter.dump_json(self._file_list_table)
+        js["dtype"] = numpy.dtype(self.laneDtype).name
         return js
 
     @classmethod
     def from_h5_group(cls, data: h5py.Group, params: Dict = None):
         params = params or {}
-        
-        params["url"] = self._type_adapter.validate_python(group["fileListTable"])
+        _type_adapter = TypeAdapter(FileListSerializer)
+
+        params.update(
+            {
+                "fileListTable": _type_adapter.validate_json(data["fileListTable"][()]),
+                "default_tags": vigra.AxisTags.fromJSON(data["axistags"][()].decode()),
+                "laneShape": data["shape"][()],
+                "laneDtype": numpy.dtype(data["dtype"]),
+            }
+        )
         return super().from_h5_group(data, params=params)
 
+    @property
     def effective_path(self) -> str:
-        return f"Grid {len(self._file_list_table)}: {next(iter(self._file_list_table.values()))} ..."
+        return f"Grid {len(self._file_list_table)}: {next(iter(self._file_list_table.values())).filename} ..."
 
     def create_data_reader(self, parent: Optional[Operator] = None, graph: Optional[Graph] = None) -> OutputSlot:
-        op_reader = 
+        op_reader = OpInputDataReader(
+            parent=parent,
+            graph=graph,
+            FileList=self._file_list_table,
+            WorkingDirectory=str(self.default_output_dir),
+            FilePath="ignore",
+            SequenceAxis="grid",
+        )
+        return op_reader.Output
 
+    @classmethod
+    def from_file_list(cls, file_list: FileList):
+        _grid, dtype, shape, axistags = determine_grid_shape(file_list)
+        return cls(fileListTable=file_list, laneShape=shape, laneDtype=dtype, default_tags=axistags)
+
+    @property
+    def display_string(self) -> str:
+        return self.effective_path
+
+    @property
+    def legacy_location(self) -> str:
+        return "Grid"
 
 
 class OpDataSelection(Operator):
@@ -927,7 +958,7 @@ class OpDataSelection(Operator):
     DatasetOut = OutputSlot(
         stype="object"
     )  # Connected to self.Dataset only if no dataset constraints are violated, for UI
-    FileListTable = FileListTableOutputSlot(stype="object")
+    FileListTable = OutputSlot[FileList](stype="object")
     ImageName = OutputSlot(stype="string")  # : The name of the output image
 
     def __init__(
@@ -1074,7 +1105,7 @@ class OpDataSelectionGroup(Operator):
     AllowLabels = OutputSlot(stype="bool")  # Taken from dataset in first role (usually Raw Data)
 
     DatasetGroupOut = OutputSlot(stype="object", level=1)  # Valid Dataset information, for UI
-    FileListTable = FileListTableOutputSlot(stype="object")
+    FileListTable = OutputSlot[FileList](stype="object")
 
     # Must be the LAST slot declared in this class.
     # When the shell detects that this slot has been resized,

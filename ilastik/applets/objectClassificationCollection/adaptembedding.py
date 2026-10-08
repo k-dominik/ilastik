@@ -32,7 +32,7 @@ import torchvision.transforms as T
 
 from ilastik.applets.objectClassificationCollection.types import LabelRow, LabelTable
 from lazyflow.operators.ioOperators.types import FileList
-from lazyflow.utility.grid import _OUTPUT_AXIS_KEYS
+from lazyflow.utility.grid import OUTPUT_AXIS_KEYS
 
 DeviceLikeType: TypeAlias = Union[str, torch.device, int]
 
@@ -157,7 +157,7 @@ class TwoViewDataset(torch.utils.data.Dataset):
     def __getitem__(self, idx: int) -> tuple[npt.NDArray[np.floating], npt.NDArray[np.floating], int]:
         f_index = self._indices[idx]
         item = self._file_list[f_index]
-        data = self._ensure_rgb(item.accessor(), _OUTPUT_AXIS_KEYS)
+        data = self._ensure_rgb(item.accessor(), OUTPUT_AXIS_KEYS)
         label = self._labels.get(f_index)
         if label is None or label.label == 0:
             label_number = -1
