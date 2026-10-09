@@ -22,6 +22,7 @@ import os
 import pickle
 import shutil
 import tempfile
+from typing import Annotated, Any, Literal
 import unittest
 from copy import deepcopy
 from unittest import mock
@@ -29,6 +30,7 @@ from unittest import mock
 import h5py
 from lazyflow.base import ItemId
 from lazyflow.operators.ioOperators.types import RowBase
+from lazyflow.operators.valueProviders import OpValueCache
 import numpy
 import pytest
 from sklearn.discriminant_analysis import LinearDiscriminantAnalysis, QuadraticDiscriminantAnalysis
@@ -65,7 +67,7 @@ from lazyflow.operators.opRelabelConsecutive import OpRelabelConsecutive
 from lazyflow.rtype import List
 from lazyflow.slot import OutputSlot
 from lazyflow.stype import Opaque
-from pydantic import ConfigDict
+from pydantic import BeforeValidator, ConfigDict, PlainSerializer
 from pydantic.dataclasses import dataclass
 
 
@@ -100,7 +102,7 @@ def randArray():
 
 class TestDataclassSerializer:
     @dataclass(config=ConfigDict(arbitrary_types_allowed=True))
-    class A(RowBase):
+    class A:
         x: str
         y: int
         z: float
@@ -123,7 +125,7 @@ class TestDataclassSerializer:
 
     @pytest.fixture
     def instance_1(self) -> "A":
-        return self.A(id=ItemId(5), x="test", y=42, z=13.4, w=numpy.arange(100, dtype="uint8"))
+        return self.A(x="test", y=42, z=13.4, w=numpy.arange(100, dtype="uint8"))
 
     @pytest.fixture
     def value_op(self, graph, instance_1: "A") -> "Op":
@@ -174,17 +176,38 @@ class TestDataclassSerializer:
         numpy.testing.assert_array_equal(deserialized.w, instance_1.w)
 
 
+@dataclass(config=ConfigDict(arbitrary_types_allowed=True))
+class A:
+    x: str
+    y: int
+    z: float
+    w: numpy.ndarray
+
+
+def _dump_table(table: dict[ItemId, A]) -> dict[str, Any]:
+    ids = np.array([x for x in table.keys()], dtype="uint64")
+    vals_x = np.stack([x.x for x in table.values()], axis=0)
+    vals_y = np.stack([x.y for x in table.values()], axis=0)
+    valz_z = np.stack([x.z for x in table.values()], axis=0)
+    vals_w = np.stack([x.w for x in table.values()], axis=0)
+    return dict(indices=ids, x=vals_x, y=vals_y, z=vals_z, w=vals_w)
+
+
+def _restore_table(data_dict: dict[Literal["indices", "x", "y", "z", "w"], Any]) -> dict[ItemId, A]:
+    return {
+        ItemId(id): A(x=x, y=y, z=z, w=w)
+        for id, x, y, z, w in zip(data_dict["indices"], data_dict["x"], data_dict["y"], data_dict["z"], data_dict["w"])
+    }
+
+
+ATable = Annotated[dict[ItemId, A], BeforeValidator(_restore_table), PlainSerializer(_dump_table)]
+
+
 class TestDataclassDictSerializer:
-    @dataclass(config=ConfigDict(arbitrary_types_allowed=True))
-    class A(RowBase):
-        x: str
-        y: int
-        z: float
-        w: numpy.ndarray
 
     class Op(Operator):
-        Input = InputSlot["TestDataclassSerializer.A"](stype="object")
-        Output = OutputSlot["TestDataclassSerializer.A"]()
+        Input = InputSlot[ATable](stype="object")
+        Output = OutputSlot[ATable]()
 
         def execute(self, slot, subindex, roi, result):
             val = self.Input.value
@@ -199,35 +222,45 @@ class TestDataclassDictSerializer:
 
     @pytest.fixture
     def data_dict(self) -> dict[ItemId, "A"]:
-        return {ItemId(5): self.A(id=ItemId(5), x="test", y=42, z=13.4, w=numpy.arange(100, dtype="uint8"))}
+        return {ItemId(5): A(x="test", y=42, z=13.4, w=numpy.arange(100, dtype="uint8"))}
 
     @pytest.fixture
-    def value_op(self, graph, data_dict: "A") -> "Op":
+    def cache_op(self, graph):
+        return OpValueCache(graph=graph)
+
+    @pytest.fixture
+    def value_op(self, graph, data_dict: "ATable") -> "Op":
         op = self.Op(graph=graph)
+        cache = OpValueCache(parent=op)
         op.Input.setValue(data_dict)
         return op
 
     def test_dataclass_write(
-        self, empty_in_memory_project_file: h5py.File, data_dict: dict[ItemId, "A"], value_op: "Op"
+        self,
+        empty_in_memory_project_file: h5py.File,
+        data_dict: dict[ItemId, "A"],
+        value_op: "Op",
+        cache_op: OpValueCache[ATable],
     ):
-        serializer = SerialDataclassDictSlot(value_op.Output, self.A, name="test")
+        cache_op.Input.connect(value_op.Output)
+        _ = cache_op.Output.value
+        serializer = SerialDataclassDictSlot(cache_op.Output, A, cache_op, name="test")
         serializer.serialize(empty_in_memory_project_file)
 
         assert "test" in empty_in_memory_project_file
         test_group = empty_in_memory_project_file["test"]
-        assert "5" in test_group
-        assert test_group["5/x"].attrs["__deserialize_type__"] == "str"
-        assert test_group["5/x"][()].decode() == data_dict[ItemId(5)].x
-        assert test_group["5/y"][()] == data_dict[ItemId(5)].y
-        assert test_group["5/y"].attrs["__deserialize_type__"] == "int"
-        assert test_group["5/z"][()] == data_dict[ItemId(5)].z
-        assert test_group["5/z"].attrs["__deserialize_type__"] == "float"
-        numpy.testing.assert_array_equal(test_group["5/w"][()], data_dict[ItemId(5)].w)
-        assert test_group["5/w"].attrs["__deserialize_type__"] == "ndarray"
+        assert "indices" in test_group
+        assert "x" in test_group
+        assert "y" in test_group
+        assert "z" in test_group
+        assert "w" in test_group
+        numpy.testing.assert_array_equal(test_group["w"][()], data_dict[ItemId(5)].w)
 
-    def test_dataclass_read(self, empty_in_memory_project_file: h5py.File, data_dict: "A", graph):
-        op = self.Op(graph=graph)
-        serializer = SerialDataclassDictSlot(op.Output, self.A, inslot=op.Input, name="test")
+    def test_dataclass_read(
+        self, empty_in_memory_project_file: h5py.File, data_dict: "A", value_op: "Op", cache_op: OpValueCache[ATable]
+    ):
+        cache_op.Input.connect(value_op.Output)
+        serializer = SerialDataclassDictSlot(value_op.Output, self.A, cache_op, inslot=op.Input, name="test")
 
         g = empty_in_memory_project_file.create_group("test/5")
         ds = g.create_dataset("id", data=5)

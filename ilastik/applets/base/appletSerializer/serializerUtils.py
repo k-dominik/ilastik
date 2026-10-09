@@ -19,6 +19,7 @@
 #          http://ilastik.org/license.html
 ###############################################################################
 from typing import Sequence, Tuple, Union
+from dataclasses import fields
 
 import h5py
 import numpy
@@ -111,7 +112,7 @@ def encode_value(group, name, value):
     elif isinstance(value, float):
         ds = group.create_dataset(name=name, data=value)
         ds.attrs["__deserialize_type__"] = "float"
-    elif isinstance(value, np.ndarray):
+    elif isinstance(value, numpy.ndarray):
         ds = group.create_dataset(name=name, data=value, dtype=value.dtype)
         ds.attrs["__deserialize_type__"] = "ndarray"
         ds.attrs["__deserialize_dtype__"] = f"{value.dtype}"

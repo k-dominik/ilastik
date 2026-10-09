@@ -749,7 +749,6 @@ class FilesystemDatasetInfo(DatasetInfo):
         params = {
             "project_file": data.file,
             "filePath": data["filePath"][()].decode("utf-8"),
-            "sequence_axis": data["sequence_axis"][()].decode("utf-8"),
         }
         return super().from_h5_group(data, params)
 
@@ -808,12 +807,6 @@ class FilesystemDatasetInfo(DatasetInfo):
             external_path = PathComponents(expanded_path).externalPath
             possible_internal_paths |= set(self.getPossibleInternalPathsFor(external_path))
         return possible_internal_paths
-
-    def to_json_data(self) -> Dict:
-        out = super().to_json_data()
-        if self.sequence_axis is not None:
-            out["sequence_axis"] = self.sequence_axis.encode()
-        return out
 
 
 class RelativeFilesystemDatasetInfo(FilesystemDatasetInfo):
