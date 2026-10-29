@@ -185,11 +185,11 @@ class A:
 
 
 def _dump_table(table: dict[ItemId, A]) -> dict[str, Any]:
-    ids = np.array([x for x in table.keys()], dtype="uint64")
-    vals_x = np.stack([x.x for x in table.values()], axis=0)
-    vals_y = np.stack([x.y for x in table.values()], axis=0)
-    valz_z = np.stack([x.z for x in table.values()], axis=0)
-    vals_w = np.stack([x.w for x in table.values()], axis=0)
+    ids = numpy.array([x for x in table.keys()], dtype="uint64")
+    vals_x = numpy.stack([x.x for x in table.values()], axis=0)
+    vals_y = numpy.stack([x.y for x in table.values()], axis=0)
+    vals_z = numpy.stack([x.z for x in table.values()], axis=0)
+    vals_w = numpy.stack([x.w for x in table.values()], axis=0)
     return dict(indices=ids, x=vals_x, y=vals_y, z=vals_z, w=vals_w)
 
 
@@ -208,6 +208,11 @@ class TestDataclassDictSerializer:
     class Op(Operator):
         Input = InputSlot[ATable](stype="object")
         Output = OutputSlot[ATable]()
+        CacheInput = InputSlot[ATable](optional=True)
+
+        def _setInSlot(self, slot, subindex, roi, value):
+            assert slot == self.CacheInput
+            self.Input.setValue(value)
 
         def execute(self, slot, subindex, roi, result):
             val = self.Input.value
@@ -231,7 +236,6 @@ class TestDataclassDictSerializer:
     @pytest.fixture
     def value_op(self, graph, data_dict: "ATable") -> "Op":
         op = self.Op(graph=graph)
-        cache = OpValueCache(parent=op)
         op.Input.setValue(data_dict)
         return op
 
@@ -244,7 +248,7 @@ class TestDataclassDictSerializer:
     ):
         cache_op.Input.connect(value_op.Output)
         _ = cache_op.Output.value
-        serializer = SerialDataclassDictSlot(cache_op.Output, A, cache_op, name="test")
+        serializer = SerialDataclassDictSlot(cache_op.Output, ATable, cache_op, name="test")
         serializer.serialize(empty_in_memory_project_file)
 
         assert "test" in empty_in_memory_project_file
@@ -254,37 +258,35 @@ class TestDataclassDictSerializer:
         assert "y" in test_group
         assert "z" in test_group
         assert "w" in test_group
-        numpy.testing.assert_array_equal(test_group["w"][()], data_dict[ItemId(5)].w)
+        numpy.testing.assert_array_equal(test_group["w"][()], numpy.stack([row.w for row in data_dict.values()]))
 
     def test_dataclass_read(
-        self, empty_in_memory_project_file: h5py.File, data_dict: "A", value_op: "Op", cache_op: OpValueCache[ATable]
+        self, graph, empty_in_memory_project_file: h5py.File, data_dict: ATable, cache_op: OpValueCache[ATable]
     ):
+        value_op = self.Op(graph=graph)
         cache_op.Input.connect(value_op.Output)
-        serializer = SerialDataclassDictSlot(value_op.Output, self.A, cache_op, inslot=op.Input, name="test")
+        serializer = SerialDataclassDictSlot(cache_op.Output, ATable, cache_op, inslot=value_op.CacheInput, name="test")
 
-        g = empty_in_memory_project_file.create_group("test/5")
-        ds = g.create_dataset("id", data=5)
-        ds.attrs["__deserialize_type__"] = "int"
-        ds = g.create_dataset("x", data=b"test")
-        ds.attrs["__deserialize_type__"] = "str"
-        ds = g.create_dataset("y", data=42)
-        ds.attrs["__deserialize_type__"] = "int"
-        ds = g.create_dataset("z", data=13.4)
-        ds.attrs["__deserialize_type__"] = "float"
-        ds = g.create_dataset("w", data=numpy.arange(100, dtype="uint8"))
-        ds.attrs["__deserialize_type__"] = "ndarray"
-        ds.attrs["__deserialize_dtype__"] = "uint8"
+        group = empty_in_memory_project_file.create_group("test")
+        for name, value in _dump_table(data_dict).items():
+            if name == "x":
+                group.create_dataset(name, data=value.astype(object), dtype=h5py.string_dtype(encoding="utf-8"))
+            else:
+                group.create_dataset(name, data=value)
 
-        assert not op.Output.ready()
+        assert not cache_op.Output.ready()
         serializer.deserialize(empty_in_memory_project_file)
 
-        assert op.Output.ready()
-        deserialized = op.Output.value
+        assert cache_op.Output.ready()
+        deserialized = cache_op.Output.value
         assert isinstance(deserialized, dict)
-        assert deserialized[ItemId(5)].x == data_dict[ItemId(5)].x
-        assert deserialized[ItemId(5)].y == data_dict[ItemId(5)].y
-        assert deserialized[ItemId(5)].z == data_dict[ItemId(5)].z
-        numpy.testing.assert_array_equal(deserialized[ItemId(5)].w, data_dict[ItemId(5)].w)
+        assert deserialized.keys() == data_dict.keys()
+        for item_id, expected in data_dict.items():
+            actual = deserialized[item_id]
+            assert actual.x == expected.x
+            assert actual.y == expected.y
+            assert actual.z == expected.z
+            numpy.testing.assert_array_equal(actual.w, expected.w)
 
 
 class TestSerializer(unittest.TestCase):

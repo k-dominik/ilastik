@@ -312,7 +312,9 @@ def write_group(base_group: h5py.Group, values: Mapping[str, Any]) -> None:
     for name, value in values.items():
         if isinstance(value, Mapping):
             write_group(base_group.create_group(name), value)
-        elif isinstance(value, str):
+        elif isinstance(value, str) or (isinstance(value, np.ndarray) and value.dtype.kind == "U"):
+            if isinstance(value, np.ndarray):
+                value = value.astype(object)
             dtype = h5py.string_dtype(encoding="utf-8")
             base_group.create_dataset(name, data=value, dtype=dtype)
         elif isinstance(value, (np.ndarray, np.number, int, float, bool)):
