@@ -870,7 +870,7 @@ class GridDatasetInfo(DatasetInfo):
             scale_locked=scale_locked,
             axis_units=axis_units,
         )
-
+        self._hack_op: OpInputDataReader | None = None
         self._file_list_table = fileListTable
 
     def to_json_data(self) -> Dict:
@@ -908,6 +908,7 @@ class GridDatasetInfo(DatasetInfo):
             FilePath="ignore",
             SequenceAxis="grid",
         )
+        self._hack_op = op_reader
         return op_reader.Output
 
     @classmethod

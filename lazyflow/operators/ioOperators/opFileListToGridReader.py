@@ -73,7 +73,6 @@ class OpFileListToGridReader(Operator):
         self.FileList.setOrConnectIfAvailable(FileList)
 
     def setupOutputs(self):
-        output_axis_keys = "".join(OUTPUT_AXIS_KEYS)
         file_list = self.FileList.value
         grid, dtype, shape, axistags = determine_grid_shape(file_list)
         self._grid = grid
@@ -110,7 +109,7 @@ class OpFileListToGridReader(Operator):
                 block[block == 0] = min_val
             result[:] = block
         elif slot == self.FileListTable:
-            return [self._table]
+            return [self.FileList.value]
 
     def _load_image(self, item_id: ItemId) -> vigra.VigraArray | None:
         table = self.FileList.value
