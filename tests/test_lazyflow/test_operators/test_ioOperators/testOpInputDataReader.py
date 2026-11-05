@@ -20,6 +20,8 @@
 # 		   http://ilastik.org/license/
 ###############################################################################
 from lazyflow.operators.ioOperators import OpInputDataReader
+from lazyflow.operators.ioOperators.functional import imageReader
+from lazyflow.operators.ioOperators.types import FileList, FileListDataRowNoId
 from lazyflow.operator import Operator
 import json
 import os
@@ -42,7 +44,38 @@ from lazyflow.utility.io_util.OMEZarrStore import (
     NotAnOMEZarrMultiscale,
 )
 from lazyflow.utility.io_util.multiscaleStore import Multiscale
+from lazyflow.utility.grid import OUTPUT_AXIS_KEYS
 from lazyflow.utility.io_util.write_ome_zarr import OME_ZARR_V_0_4_KWARGS
+
+
+def test_grid_file_list_metadata_is_available_without_reading_pixels(graph, png_image, monkeypatch):
+    table = FileList()
+    meta = imageReader.determine_metadata(str(png_image))
+    table.add_no_id(FileListDataRowNoId.from_image_meta_with_axes(meta, axisorder=OUTPUT_AXIS_KEYS))
+
+    def unexpected_image_read(*args, **kwargs):
+        pytest.fail("Requesting file-list metadata must not read image pixels")
+
+    monkeypatch.setattr(imageReader, "read", unexpected_image_read)
+    reader = OpInputDataReader(
+        graph=graph,
+        FileList=table,
+        WorkingDirectory=str(png_image.parent),
+        FilePath="ignore",
+        SequenceAxis="grid",
+    )
+    try:
+        assert reader.FileListTable.ready()
+        assert reader.FileListTable.value is table
+        assert next(iter(reader.FileListTable.value.values())).filename == str(png_image)
+
+        dirty_notifications = []
+        reader.FileListTable.notifyDirty(lambda *args: dirty_notifications.append(args))
+        reader.FileList.setDirty(())
+        assert dirty_notifications
+        assert reader.FileListTable.value is table
+    finally:
+        reader.cleanUp()
 
 
 class TestOpInputDataReader(object):

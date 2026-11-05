@@ -31,8 +31,7 @@ def as_shallow_dict(ds) -> dict[str, Any]:
     return {f.name: getattr(ds, f.name) for f in fields(ds)}
 
 
-def determine_grid_shape(file_list: FileListT):
-    output_axis_keys = "".join(OUTPUT_AXIS_KEYS)
+def determine_grid_shape(file_list: FileListT) -> tuple[ImageGrid, np.dtype, tuple[int, ...], vigra.AxisTags]:
     shapes: list[tuple[int, ...]] = [f.shape for f in file_list.values()]
 
     max_t = max(x[0] for x in shapes)
@@ -60,7 +59,6 @@ def determine_grid_shape(file_list: FileListT):
 class OpFileListToGridReader(Operator):
     FileList = InputSlot[FileListT]()
 
-    FileListTable = OutputSlot[FileList]()
     Output = OutputSlot()
 
     # How many pixels around the images to add to the grid
@@ -68,8 +66,6 @@ class OpFileListToGridReader(Operator):
 
     def __init__(self, FileList: Optional[Slot[FileListT]], *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self._files_table = None
-        self._internal_operators = None
         self.FileList.setOrConnectIfAvailable(FileList)
 
     def setupOutputs(self):
@@ -82,13 +78,13 @@ class OpFileListToGridReader(Operator):
         self.Output.meta.axistags = axistags
         self.Output.meta.display_mode = "default"
 
-        self.FileListTable.meta.shape = (1,)
-        self.FileListTable.meta.dtype = object
-
     def execute(self, slot, subindex, roi, result):
         if slot == self.Output:
             block = np.zeros_like(result)
-            min_val = None
+            tagged_start = dict(zip(self.Output.meta.axistags.keys(), roi.start))
+            tagged_stop = dict(zip(self.Output.meta.axistags.keys(), roi.stop))
+            c_slice = slice(tagged_start["c"], tagged_stop["c"])
+            slicing = tuple([slice(None) if k != "c" else c_slice for k in tagged_start.keys()])
             for grid_cell in self._grid.grid_cells_per_roi(roi):
                 if grid_cell.image_index is None:
                     continue
@@ -97,19 +93,10 @@ class OpFileListToGridReader(Operator):
                 if image is None:
                     continue
 
-                data = grid_cell.data(dtype=result.dtype, image_data=image)
+                data = grid_cell.data(dtype=result.dtype, image_data=image[slicing])
                 block[grid_cell.roi_local_clamped_slice] = data
-                if min_val is None:
-                    min_val = image.min()
-                else:
-                    min_val = image.min() if image.min() < min_val else min_val
 
-            # TODO: find a better way to deal with the background
-            if min_val is not None:
-                block[block == 0] = min_val
             result[:] = block
-        elif slot == self.FileListTable:
-            return [self.FileList.value]
 
     def _load_image(self, item_id: ItemId) -> vigra.VigraArray | None:
         table = self.FileList.value
@@ -122,4 +109,3 @@ class OpFileListToGridReader(Operator):
     def propagateDirty(self, slot, subindex, roi):
         assert slot == self.FileList
         self.Output.setDirty(())
-        self.FileListTable.setDirty(())

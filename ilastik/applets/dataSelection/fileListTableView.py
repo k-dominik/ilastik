@@ -41,7 +41,8 @@ class FileListTableView(QTableView):
         self.setContextMenuPolicy(Qt.CustomContextMenu)
         self.customContextMenuRequested.connect(self._context_menu)
         self.horizontalHeader().setSectionResizeMode(QHeaderView.Interactive)
-        self.horizontalHeader().setStretchLastSection(True)
+        # Stretching overrides interactive resizing for the last column.
+        self.horizontalHeader().setStretchLastSection(False)
 
     def selected_item_ids(self):
         if self.selectionModel() is None:

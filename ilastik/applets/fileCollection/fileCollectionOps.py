@@ -110,11 +110,9 @@ class OpGrid(Operator):
         raise ValueError(f"Wrong slot {slot.name} for this operator")
 
     def propagateDirty(self, slot, subindex, roi):
-        if slot == self.FileList:
-            self.Grid.setDirty(())
         if slot == self.SubsetObjects:
             self.setupOutputs()
-            self.Grid.setDirty(())
+        self.Grid.setDirty(())
 
     def object_id_at(self, coordinate5d):
         tagged_coord = {ax: coord for ax, coord in zip("txyzc", coordinate5d)}
@@ -172,7 +170,10 @@ class OpGridView(Operator):
         if slot == self.Output:
             assert self._grid
             block = np.zeros_like(result)
-            min_val = None
+            tagged_start = dict(zip(self.Output.meta.axistags.keys(), roi.start))
+            tagged_stop = dict(zip(self.Output.meta.axistags.keys(), roi.stop))
+            c_slice = slice(tagged_start["c"], tagged_stop["c"])
+            slicing = tuple([slice(None) if k != "c" else c_slice for k in tagged_start.keys()])
             for grid_cell in self._grid.grid_cells_per_roi(roi):
                 if grid_cell.image_index is None:
                     continue
@@ -181,16 +182,9 @@ class OpGridView(Operator):
                 if image is None:
                     continue
 
-                data = grid_cell.data(dtype=result.dtype, image_data=image)
+                data = grid_cell.data(dtype=result.dtype, image_data=image[slicing])
                 block[grid_cell.roi_local_clamped_slice] = data
-                if min_val is None:
-                    min_val = image.min()
-                else:
-                    min_val = image.min() if image.min() < min_val else min_val
 
-            # TODO: find a better way to deal with the background
-            if min_val is not None:
-                block[block == 0] = min_val
             result[:] = block
 
     def _load_image(self, item_id: ItemId) -> vigra.VigraArray | None:

@@ -182,6 +182,8 @@ class TwoViewDataset(torch.utils.data.Dataset):
             slicing = [slice(None) for _ in axistags]
             slicing[c_index] = slice(0, 1)
             arr_rgb = np.concatenate([image_array, image_array[tuple(slicing)]], axis=c_index)
+        elif image_array.shape[c_index] == 3:
+            arr_rgb = image_array
 
         # has 3 channels
         # ensure channel axis first

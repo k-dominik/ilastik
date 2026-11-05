@@ -173,8 +173,13 @@ class ImageGrid:
         self.output_axis_keys = OUTPUT_AXIS_KEYS
 
     def grid_cells_per_roi(self, roi: RoiLike) -> Iterator[ImageGridCell]:
+        """
+        special handling for c and t in the roi - grid_cell_shape will be taking those into account, while
+        grid cells retain their full size in spacial direction always,
+        """
         t_start, x_start, y_start, z_start, c_start = roi.start
         t_stop, x_stop, y_stop, z_stop, c_stop = roi.stop
+        _s_t, s_x, s_y, s_z, _s_c = self._cell_shape
 
         roi_start = _GridCoords(x_start, y_start)
         roi_stop = _GridCoords(x_stop, y_stop)
@@ -223,15 +228,15 @@ class ImageGrid:
                 raise ValueError()
 
             roi_local_clamped_slice = (
-                slice(t_start, t_stop),
+                slice(0, t_stop - t_start),
                 slice(start_coords_clamped_roi_local.x, end_coords_clamped_roi_local.x),
                 slice(start_coords_clamped_roi_local.y, end_coords_clamped_roi_local.y),
                 slice(z_start, z_stop),
-                slice(c_start, c_stop),
+                slice(0, c_stop - c_start),
             )
 
             output_slice = (
-                slice(t_start, t_stop),
+                slice(0, t_stop - t_start),
                 slice(
                     start_offset_in_grid_cell.x,
                     start_offset_in_grid_cell.x + end_coords_clamped_roi_local.x - start_coords_clamped_roi_local.x,
@@ -241,14 +246,14 @@ class ImageGrid:
                     start_offset_in_grid_cell.y + end_coords_clamped_roi_local.y - start_coords_clamped_roi_local.y,
                 ),
                 slice(z_start, z_stop),
-                slice(c_start, c_stop),
+                slice(0, c_stop - c_start),
             )
 
             yield ImageGridCell(
                 roi_local_clamped_slice=roi_local_clamped_slice,
                 image_index=ItemId(image_index) if image_index is not None else image_index,
                 _output_slice=output_slice,
-                _grid_cell_full_shape=self._cell_shape,
+                _grid_cell_full_shape=(t_stop - t_start, s_x, s_y, s_z, c_stop - c_start),
                 _margin=self._margin,
             )
 

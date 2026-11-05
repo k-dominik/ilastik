@@ -245,7 +245,13 @@ class OpInputDataReader(Operator):
         self.opInjector = OpMetadataInjector(parent=self)
         self.opInjector.Input.connect(self.internalOutput)
 
+        self.FileListTable.disconnect()
         for op in self.internalOperators:
+            if isinstance(op, OpFileListToGridReader):
+                # The grid reader exposes the collection as an input only.
+                # Forward its metadata without requesting any image pixels.
+                self.FileListTable.connect(op.FileList)
+                break
             if "FileListTable" in op.outputs:
                 self.FileListTable.connect(op.FileListTable)
                 break
