@@ -72,7 +72,7 @@ class OpGrid(Operator):
         if self.SubsetObjects.ready():
             sub_selection = self.SubsetObjects.value
             if len(sub_selection) > 0:
-                self._table = {id: self._table[id] for id in sub_selection}
+                self._table = {id: self._table[id] for id in sub_selection if id in self._table}
 
         if not sub_selection and not self._all_if_no_subselection:
             # empty sub_selection - empty grid

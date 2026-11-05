@@ -20,8 +20,9 @@
 ###############################################################################
 import logging
 
-from qtpy.QtCore import Qt
+from qtpy.QtCore import QEvent, Qt
 from qtpy.QtWidgets import (
+    QAbstractItemView,
     QApplication,
     QHBoxLayout,
     QLabel,
@@ -32,6 +33,10 @@ from qtpy.QtWidgets import (
     QVBoxLayout,
     QWidget,
 )
+from volumina.interpreter import ClickInterpreter
+
+from lazyflow.operators.ioOperators.functional.imageReader import SimpleRoi
+from lazyflow.operators.ioOperators.opFileListToGridReader import determine_grid_shape
 
 from ilastik.applets.layerViewer.layerViewerGui import LayerViewerGui
 from ilastik.utility.gui import ThreadRouter, threadRouted
@@ -41,6 +46,16 @@ from .fileListTableModel import FileListTableModel
 from .fileListTableView import FileListTableView
 
 logger = logging.getLogger(__name__)
+
+
+class _DoubleClickInterpreter(ClickInterpreter):
+    """Small wrapper around ClickInterpreter that forwards double clicks"""
+
+    def eventFilter(self, watched, event):
+        if event.type() == QEvent.MouseButtonDblClick and event.button() == self.button:
+            super().eventFilter(watched, event)
+
+        return self.baseInterpret.eventFilter(watched, event)
 
 
 class _CollectionViewer(LayerViewerGui):
@@ -75,6 +90,7 @@ class DataSelectionFileListGui(QWidget):
         self.tableView.addFilesRequested.connect(self.addFiles)
         self.tableView.filesDropped.connect(self.addFileNames)
         self.tableView.removeFilesRequested.connect(self.removeFiles)
+        self.tableView.doubleClicked.connect(self._show_cell)
 
         add_button = QPushButton("Add files...")
         add_button.clicked.connect(self.addFiles)
@@ -133,10 +149,46 @@ class DataSelectionFileListGui(QWidget):
         if laneIndex != 0:
             raise ValueError("File-list data selection supports only lane zero.")
         self._viewer = _CollectionViewer(self.parentApplet, self.topLevelOperator.getLane(0), crosshair=False)
+        editor = self._viewer.editor
+        editor.setNavigationInterpreter(
+            _DoubleClickInterpreter(editor, None, self._select_cell_row, parent=self._viewer, right=False, double=True)
+        )
         self._viewer.volumeEditorWidget.quadview.ensureMaximized(2)
         self._viewerStack.addWidget(self._viewer)
         self._viewerStack.setCurrentWidget(self._viewer)
         self._viewerControlWidgetStack.addWidget(self._viewer.viewerControlWidget())
+
+    def _select_cell_row(self, layer, pos5d, window_position):
+        table = self.parentApplet.file_list
+        if not table:
+            return
+        grid, *_ = determine_grid_shape(table)
+        if not all(0 <= position < size for position, size in zip(pos5d, grid.output_shape)):
+            return
+        cell = next(grid.grid_cells_per_roi(SimpleRoi(start=pos5d, stop=tuple(p + 1 for p in pos5d))))
+        if cell.image_index is None:
+            return
+        for row in range(self.tableModel.rowCount()):
+            if self.tableModel.get_row(row).id == cell.image_index:
+                self.tableView.selectRow(row)
+                self.tableView.scrollTo(self.tableModel.index(row, 0), QAbstractItemView.PositionAtCenter)
+                break
+
+    def _show_cell(self, index):
+        if self._viewer is None or not index.isValid():
+            return
+        table = self.parentApplet.file_list
+        item_id = self.tableModel.get_row(index.row()).id
+        if item_id not in table:
+            return
+        grid, *_ = determine_grid_shape(table)
+        cell_size = grid.grid_size_cell_px
+        grid_width = grid.output_shape[1] // cell_size
+        cell_y, cell_x = divmod(list(table).index(item_id), grid_width)
+        position = [size // 2 for size in grid.output_shape]
+        position[1] = cell_x * cell_size + cell_size // 2
+        position[2] = cell_y * cell_size + cell_size // 2
+        self._viewer.setViewerPos(position)
 
     @threadRouted
     def imageLaneRemoved(self, laneIndex, finalLength):
