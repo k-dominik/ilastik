@@ -22,7 +22,7 @@ import enum
 import itertools
 from typing import TYPE_CHECKING
 
-from ilastik.applets.dataSelection.dataSelectionApplet import DataSelectionApplet
+from ilastik.applets.dataSelection.dataSelectionFileListApplet import DataSelectionFileListApplet
 from ilastik.applets.objectClassificationCollection.objectClassficationCollectionApplet import (
     ObjectClassificationCollectionApplet,
 )
@@ -75,12 +75,12 @@ class OcFromCollection(Workflow):
         self._applets.append(self.objectClassificationApplet)
 
     def createDataSelectionApplet(self):
-        data_instructions = "Load a folder of objects in separate images using the 'Raw Data' tab shown on the right."
+        data_instructions = "Add the individual object images to the file collection shown on the right."
         c_at_end = ["yxc", "xyc"]
         for perm in itertools.permutations("zyx", 3):
             c_at_end.append("".join(perm) + "c")
 
-        applet = DataSelectionApplet(
+        applet = DataSelectionFileListApplet(
             self,
             "Input Data",
             "Input Data",

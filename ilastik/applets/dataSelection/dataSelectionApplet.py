@@ -53,6 +53,7 @@ class DataSelectionApplet(Applet):
     """
 
     DEFAULT_INSTRUCTIONS = "Use the controls shown to the right to add image files to this workflow."
+    operatorClass = OpMultiLaneDataSelectionGroup
 
     def __init__(
         self,
@@ -66,7 +67,7 @@ class DataSelectionApplet(Applet):
         max_lanes=None,
         show_axis_details=False,
     ):
-        self.__topLevelOperator = OpMultiLaneDataSelectionGroup(parent=workflow, forceAxisOrder=forceAxisOrder)
+        self.__topLevelOperator = self.operatorClass(parent=workflow, forceAxisOrder=forceAxisOrder)
         super(DataSelectionApplet, self).__init__(title, syncWithImageIndex=False)
 
         self._serializableItems = [DataSelectionSerializer(self.topLevelOperator, projectFileGroupName)]

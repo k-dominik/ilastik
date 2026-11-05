@@ -18,7 +18,6 @@
 # on the ilastik web site at:
 # 		   http://ilastik.org/license.html
 ###############################################################################
-from dataclasses import asdict, dataclass, fields
 from enum import IntEnum
 import itertools
 import logging
@@ -26,7 +25,7 @@ import os
 import threading
 from functools import partial
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Callable, Dict, List, Set, Union, Optional
+from typing import TYPE_CHECKING, Dict, List, Set, Union, Optional
 
 import h5py
 from qtpy import uic
@@ -34,9 +33,7 @@ from qtpy.QtWidgets import QCheckBox, QDialog, QMessageBox, QStackedWidget, QWid
 from qtpy.QtCore import Qt
 from vigra import AxisTags
 
-from lazyflow.operators.ioOperators.functional import imageReader as f_imageReader
-from lazyflow.operators.ioOperators.types import FileList, FileListDataRowNoId
-from lazyflow.utility.grid import OUTPUT_AXIS_KEYS
+from lazyflow.operators.ioOperators.types import FileList
 from volumina.utility import preferences
 
 from ilastik.applets.base.applet import DatasetConstraintError
@@ -53,6 +50,7 @@ from .dataLaneSummaryTableModel import DataLaneSummaryTableModel
 from .datasetDetailedInfoTableModel import DatasetDetailedInfoTableModel
 from .datasetDetailedInfoTableView import DatasetDetailedInfoTableView
 from .datasetInfoEditorWidget import DatasetInfoEditorWidget
+from .fileListDataset import read_file_list
 from .opDataSelection import (
     DatasetInfo,
     GridDatasetInfo,
@@ -65,7 +63,6 @@ if TYPE_CHECKING:
     from .opDataSelection import OpMultiLaneDataSelectionGroup
     from ilastik.applets.dataSelection.dataSelectionApplet import DataSelectionApplet
     from ilastik.applets.dataSelection.dataSelectionSerializer import DataSelectionSerializer
-    from lazyflow.operators.ioOperators.functional.imageReader import ImageMeta
     import vigra
 
 logger = logging.getLogger(__name__)
@@ -706,32 +703,7 @@ class DataSelectionGui(QWidget):
             )
 
     def _check_image_grid(self, files: list[str]) -> FileList:
-        supported_suffixes = [".png", ".jpeg", ".jpg"]
-
-        @dataclass
-        class ReaderFunctions:
-            read_meta: Callable[[str], "ImageMeta"]
-
-        if not all(Path(x).suffix.lower() in supported_suffixes for x in files):
-            raise ValueError(
-                f"Unsupported files found: {[x for x in files if Path(x).suffix.lower() not in supported_suffixes][0:5]}.... "
-                f"Currently the only supported types are {supported_suffixes}. "
-                f"Please get in touch with the ilastik team if you need support for other files."
-            )
-
-        reader_lookup = {
-            ".jpg": ReaderFunctions(read_meta=f_imageReader.determine_metadata),
-            ".jpeg": ReaderFunctions(read_meta=f_imageReader.determine_metadata),
-            ".png": ReaderFunctions(read_meta=f_imageReader.determine_metadata),
-        }
-        meta = [reader_lookup[Path(f).suffix.lower()].read_meta(f) for f in files]
-        file_list = FileList()
-        # populate
-        [
-            file_list.add_no_id(FileListDataRowNoId.from_image_meta_with_axes(m, axisorder=OUTPUT_AXIS_KEYS))
-            for m in meta
-        ]
-        return file_list
+        return read_file_list(files)
 
     def addStack(self, roleIndex: int, laneIndex: int):
         """
