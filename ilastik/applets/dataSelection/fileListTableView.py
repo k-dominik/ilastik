@@ -20,9 +20,12 @@
 ###############################################################################
 from pathlib import Path
 
+from pathlib import Path
+
 from qtpy.QtCore import Qt, Signal
 from qtpy.QtWidgets import QAbstractItemView, QHeaderView, QMenu, QTableView
 
+from .fileListDataset import SUPPORTED_SUFFIXES
 from .fileListTableModel import FileListColumn
 
 
@@ -81,7 +84,19 @@ class FileListTableView(QTableView):
     def dropEvent(self, event):
         urls = event.mimeData().urls()
         if urls and all(url.isLocalFile() for url in urls):
-            self.filesDropped.emit([url.toLocalFile() for url in urls])
-            event.acceptProposedAction()
-        else:
-            event.ignore()
+            files = []
+            for url in urls:
+                path = Path(url.toLocalFile())
+                candidates = path.rglob("*") if path.is_dir() else (path,)
+                files.extend(
+                    sorted(
+                        str(candidate)
+                        for candidate in candidates
+                        if candidate.suffix.lower() in SUPPORTED_SUFFIXES and candidate.is_file()
+                    )
+                )
+            if files:
+                self.filesDropped.emit(files)
+                event.acceptProposedAction()
+                return
+        event.ignore()
