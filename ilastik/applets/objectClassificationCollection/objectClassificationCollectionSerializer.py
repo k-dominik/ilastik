@@ -29,7 +29,7 @@ from ilastik.applets.base.appletSerializer.slotSerializer import (
 from ilastik.applets.objectFeatureCollection.types import EmbeddingTable
 from ilastik.applets.objectClassificationCollection.opObjectClassificationCollection import EmbeddingSource
 from ilastik.applets.objectClassificationCollection.types import UmapTable
-from .types import LabelTable, ProjectorDataS
+from .types import LabelTable, ProjectorData
 
 if TYPE_CHECKING:
     from .opObjectClassificationCollection import OpOCC
@@ -48,22 +48,40 @@ class EmbeddingSelectSerializer(SerialSlot[EmbeddingSource]):
         slot.setValue(EmbeddingSource(val))
 
 
-class ObjectClassificationCollectionSerializer(AppletSerializer):
-    # FIXME: predictions can only be saved, not loaded, because it
-    # would call setValue() on a connected slot
+class ProjectorSerializer(SerialDataclassDictSlot[ProjectorData]):
+    def _serialize(self, group: "h5py.Group", name: str, slot: "Slot[ProjectorData]"):
+        """
+        Projector training is "expensive" - projector is kept without necessarily
+        being trained with all annotations. Classifier can still be improved.
+        """
+        with self._cache._lock:
+            projector_data = self._cache._value
+        if projector_data is not None:
+            self._saveValue(group.create_group(name), name, self._type_adapter.dump_python(projector_data))
 
+
+class ObjectClassificationCollectionSerializer(AppletSerializer):
     def __init__(self, topGroupName, operator: "OpOCC"):
         self.VERSION = 1  # Make sure to bump the version in case you make any changes in the serialization
         serialSlots = [
             SerialListSlot(operator.LabelNames),
             SerialListSlot(operator.LabelColors, transform=lambda x: tuple(x.flat)),
             SerialListSlot(operator.PmapColors, transform=lambda x: tuple(x.flat)),
-            EmbeddingSelectSerializer(operator.SelectEmbeddingSource),
+            SerialDataclassDictSlot(
+                operator.AnnotationsTable, LabelTable, operator.op_grid_labels, operator.AnnotationsTableCacheInput
+            ),
+            ProjectorSerializer(
+                operator.AdaptedProjectorData,
+                ProjectorData,
+                operator.projector_cache,
+                operator.AdaptedProjectorDataCacheInput,
+            ),
             SerialDataclassDictSlot(
                 operator.AdaptedEmbeddings, EmbeddingTable, operator.embedding_cache, operator.EmbeddingCacheInput
             ),
+            SerialDataclassDictSlot(operator.Umap, UmapTable, operator.umap_cache, operator.UmapCacheInput),
             SerialDataclassDictSlot(
-                operator.AnnotationsTable, LabelTable, operator.op_grid_labels, operator.AnnotationsTableCacheInput
+                operator.AdaptedUmap, UmapTable, operator.umap_adapted_cache, operator.AdaptedUmapCacheInput
             ),
             SerialClassifierSlot(
                 operator.Classifier, operator.classifier_cache_original_embedding, name="ClassifierForests"
@@ -73,16 +91,7 @@ class ObjectClassificationCollectionSerializer(AppletSerializer):
                 operator.classifier_cache_adapted_embedding,
                 name="ClassifierForests_adapted_features",
             ),
-            SerialDataclassDictSlot(operator.Umap, UmapTable, operator.umap_cache, operator.UmapCacheInput),
-            SerialDataclassDictSlot(
-                operator.AdaptedUmap, UmapTable, operator.umap_adapted_cache, operator.AdaptedUmapCacheInput
-            ),
-            SerialDataclassDictSlot(
-                operator.AdaptedProjectorData,
-                ProjectorDataS,
-                operator.projector_cache,
-                operator.AdaptedProjectorDataCacheInput,
-            ),
+            EmbeddingSelectSerializer(operator.SelectEmbeddingSource),
         ]
 
         super().__init__(topGroupName, slots=serialSlots, operator=operator)

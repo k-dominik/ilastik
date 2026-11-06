@@ -327,12 +327,8 @@ def read_dataset(dataset: h5py.Dataset) -> Any:
     if h5py.check_string_dtype(dataset.dtype) is not None:
         return dataset.asstr()[()]
 
-    value = dataset[()]
-
-    if isinstance(value, np.generic):
-        return value.item()
-
-    return value
+    # Keep scalar dtypes, too: model state dictionaries can contain scalar tensors.
+    return dataset[()]
 
 
 def read_group(group: h5py.Group) -> dict[str, Any]:

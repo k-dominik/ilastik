@@ -570,6 +570,7 @@ class OpEmbedding(Operator):
             output_dim=projector_data.output_dim,
         )
         projector.load_state_dict(projector_data.state_dict)
+        projector.eval()
 
         return [
             self._compute_batchwise(
@@ -978,6 +979,7 @@ class OpOCC(Operator):
             self.embedding_cache.forceValue(value)
 
         if slot == self.AdaptedProjectorDataCacheInput:
+            self.AdaptionParameters.setValue(value.adaptation_parameters)
             self.projector_cache.forceValue(value)
 
     def addLane(self, laneIndex: int):

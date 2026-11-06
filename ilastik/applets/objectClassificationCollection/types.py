@@ -76,23 +76,13 @@ def to_np(tensor_dict: dict[str, Any]) -> dict[str, Any]:
 
 
 def from_np(np_dict: dict[str, Any]) -> dict[str, Any]:
-    return {name: from_numpy(np.atleast_1d(nparray)) for name, nparray in np_dict.items()}
+    return {
+        name: value if isinstance(value, Tensor) else from_numpy(np.asarray(value)) for name, value in np_dict.items()
+    }
 
 
 @dataclass(config=ConfigDict(arbitrary_types_allowed=True))
 class ProjectorData:
-    state_dict: dict[str, Tensor]
-    adaptation_parameters: AdaptionParameters
-    input_dim: int
-    hidden_dim: int
-    output_dim: int
-    n_epochs: int
-    # label_table
-    # unlabeled_items
-
-
-@dataclass(config=ConfigDict(arbitrary_types_allowed=True))
-class ProjectorDataS:
     state_dict: Annotated[dict[str, Tensor], PlainSerializer(to_np), BeforeValidator(from_np)]
     adaptation_parameters: AdaptionParameters
     input_dim: int
@@ -101,3 +91,6 @@ class ProjectorDataS:
     n_epochs: int
     # label_table
     # unlabeled_items
+
+
+ProjectorDataS = ProjectorData
