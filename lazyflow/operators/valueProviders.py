@@ -357,10 +357,11 @@ class OpValueCache(Operator, ObservableCache, Generic[_T]):
         # If we made the request, set the members
         if state == State.Dirty:
             with self._lock:
-                self.Output._sig_value_changed()
                 self._value = value
                 self._request = None
                 self._dirty = False
+
+            self.Output._sig_value_changed()
 
         return result
 

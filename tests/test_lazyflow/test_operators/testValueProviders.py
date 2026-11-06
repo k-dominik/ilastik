@@ -193,6 +193,27 @@ class TestOpValueCache:
         # But the cache notified downstream slots that his value changed
         assert outputDirtyCount[0] == 1
 
+    def test_value_changed_synced_with_cache_value(self):
+        """
+        Check that hasCacheValue can safely be used in a reaction to
+        Output.notifyValueChanged . For this the notification must happen
+        after value has been set.
+        """
+        op = OpValueCache(graph=lazyflow.graph.Graph())
+        try:
+            op.Input.setValue("42")
+            observed = []
+
+            def value_changed():
+                assert op.hasCacheValue()
+                observed.append(op.Output.value)
+
+            op.Output.notifyValueChanged(value_changed)
+            assert op.Output.value == "42"
+            assert observed == ["42"]
+        finally:
+            op.cleanUp()
+
     def test_multithread(self):
         graph = lazyflow.graph.Graph()
         opCompute = TestOpValueCache.OpSlowComputation(graph=graph)
