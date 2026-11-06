@@ -790,9 +790,12 @@ class ObjectClassificationCollectionGui(LabelingGui["OpOCC"]):
             labellayer.zeroIsTransparent = True
             labellayer.colortableIsRandom = True
             labellayer.opacity = 1.0
-
+            was_brushing = self.editor.eventSwitch.interpreter is self.editor.brushingInterpreter
             clickInt = ClickInterpreter(self.editor, labellayer, self.onClick, right=False, double=False)
             self.editor.brushingInterpreter = clickInt
+            if was_brushing:
+                # Paint may already be active before the label layer is first created.
+                self.editor.setInteractionMode("brushing")
             return labellayer, labelsrc
 
     def setupLayers(self):
