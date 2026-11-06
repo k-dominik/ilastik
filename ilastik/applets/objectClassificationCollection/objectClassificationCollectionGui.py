@@ -138,6 +138,7 @@ class SelectionViewBox(pyqtgraph.ViewBox):
 
 class ScatterWidget(QWidget):
     brush_color = "#AAAAAA"
+    umapRequested = Signal()
 
     def __init__(self, tlo: "OpOCC", parent=None):
         super().__init__(parent)
@@ -153,6 +154,8 @@ class ScatterWidget(QWidget):
         self._last_flat_indices = None
         self._embeddings = {}
         self._umap: numpy.ndarray | None = None
+        self._umap_request_id = 0
+        self.umapRequested.connect(self._request_umap_data)
 
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 2, 0, 2)
@@ -182,13 +185,14 @@ class ScatterWidget(QWidget):
         self._tlo.CachedPredictions.notifyDirty(self._recolor)
         self._tlo.PmapColors.notifyDirty(self._recolor)
         self._tlo.LabelColors.notifyDirty(self._recolor)
-        self._tlo.SelectEmbeddingSource.notifyDirty(self._request_umap_data)
+        self._tlo.SelectEmbeddingSource.notifyDirty(lambda *args: self.umapRequested.emit())
 
         def _maybe_update(*args, **kwargs):
             if self._tlo.SelectEmbeddingSource.value == EmbeddingSource.Adapted:
-                self._request_umap_data()
+                self.umapRequested.emit()
 
         self._tlo.AdaptedProjectorData.notifyDirty(_maybe_update)
+        self._tlo.AdaptedProjectorData.notifyValueChanged(_maybe_update)
 
     def showEvent(self, a0: QShowEvent) -> None:
         ret = super().showEvent(a0)
@@ -198,33 +202,33 @@ class ScatterWidget(QWidget):
     def _request_umap_data(self, *args, **kwargs):
 
         tlo = self._tlo
+        self._umap_request_id += 1
+        request_id = self._umap_request_id
+        source = tlo.SelectEmbeddingSource.value
+        umap_slot = tlo.Umap if source == EmbeddingSource.Original else tlo.AdaptedUmap
 
         class _CalcThread(QThread):
-            umapDone = Signal(object)
+            umapDone = Signal(int, int, object)
             error = Signal(str)
 
             def run(self):
                 try:
-                    # HACK: for now go deep
-                    if (
-                        tlo.SelectEmbeddingSource.value == EmbeddingSource.Adapted
-                        and not tlo.projector_cache._value is not None
-                    ):
+                    if source == EmbeddingSource.Adapted and tlo.projector_cache._value is None:
                         umap_result = None
                     else:
-                        umap_result = numpy.array([(r.x, r.y) for r in tlo.UmapForDisplay.value.values()])
-                    self.umapDone.emit(umap_result)
+                        umap_result = numpy.array([(r.x, r.y) for r in umap_slot.value.values()])
+                    self.umapDone.emit(request_id, source, umap_result)
                 except Exception:
                     self.error.emit(traceback.format_exc())
-                finally:
-                    self.finished.emit()
 
         t = _CalcThread(parent=self)
         t.umapDone.connect(self._update_embeddings)
         t.error.connect(lambda x: logger.error(x))
         t.start()
 
-    def _update_embeddings(self, umap_result: numpy.ndarray | None):
+    def _update_embeddings(self, request_id: int, source: int, umap_result: numpy.ndarray | None):
+        if request_id != self._umap_request_id or source != self._tlo.SelectEmbeddingSource.value:
+            return
         if self.plot:
             self._graphics.removeItem(self.plot)
             self.plot = None
@@ -618,7 +622,8 @@ class ObjectClassificationCollectionGui(LabelingGui["OpOCC"]):
         self.threadRouter = ThreadRouter(self)
         self._retained_weakrefs = []
         self.forceAtLeastTwoLabels(True)
-        self.topLevelOperatorView.AdaptionParameters.setValue(EFFORT_DICT[0])
+        if not self.topLevelOperatorView.AdaptionParameters.ready():
+            self.topLevelOperatorView.AdaptionParameters.setValue(EFFORT_DICT[0])
 
     def initAppletDrawerUi(self):
         super().initAppletDrawerUi()
@@ -728,8 +733,8 @@ class ObjectClassificationCollectionGui(LabelingGui["OpOCC"]):
             if mainOperator.AdaptedProjectorData.ready():
                 mainOperator.cancellation_token(token)
                 t = _CalcThread(parent=self)
-                t.start()
                 t.finished.connect(finalize)
+                t.start()
             else:
                 print("waiting for labels")
                 finalize()
@@ -760,9 +765,10 @@ class ObjectClassificationCollectionGui(LabelingGui["OpOCC"]):
         else:
             return parentFun()
 
-    def _update_embedding_source(self):
-        selected_embedding = EmbeddingSource(self._button_group_umap_source.checkedId())
-        self.topLevelOperatorView.SelectEmbeddingSource.setValue(selected_embedding)
+    def _update_embedding_source(self, button, checked: bool):
+        if checked:
+            selected_embedding = EmbeddingSource(self._button_group_umap_source.id(button))
+            self.topLevelOperatorView.SelectEmbeddingSource.setValue(selected_embedding)
 
     def _onLabelChanged(self, parentFun, mapf, slot):
         parentFun()
