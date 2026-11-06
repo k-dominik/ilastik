@@ -19,11 +19,13 @@
 #          http://ilastik.org/license.html
 ###############################################################################
 import logging
+from pathlib import Path
 
 from qtpy.QtCore import QEvent, Qt
 from qtpy.QtWidgets import (
     QAbstractItemView,
     QApplication,
+    QDialog,
     QHBoxLayout,
     QLabel,
     QMessageBox,
@@ -41,7 +43,9 @@ from lazyflow.operators.ioOperators.opFileListToGridReader import determine_grid
 from ilastik.applets.layerViewer.layerViewerGui import LayerViewerGui
 from ilastik.utility.gui import ThreadRouter, threadRouted
 from ilastik.widgets.ImageFileDialog import ImageFileDialog
+from ilastik.widgets.stackFileSelectionWidget import StackFileSelectionWidget
 
+from .fileListDataset import SUPPORTED_SUFFIXES
 from .fileListTableModel import FileListTableModel
 from .fileListTableView import FileListTableView
 
@@ -94,6 +98,8 @@ class DataSelectionFileListGui(QWidget):
 
         add_button = QPushButton("Add files...")
         add_button.clicked.connect(self.addFiles)
+        collection_button = QPushButton("Add image collection...")
+        collection_button.clicked.connect(self.addCollection)
         self.removeButton = QPushButton("Remove selected files")
         self.removeButton.clicked.connect(self.tableView.removeSelectedFiles)
         self.removeButton.setEnabled(False)
@@ -102,6 +108,7 @@ class DataSelectionFileListGui(QWidget):
 
         buttons = QHBoxLayout()
         buttons.addWidget(add_button)
+        buttons.addWidget(collection_button)
         buttons.addWidget(self.removeButton)
         buttons.addStretch()
         self._countLabel = QLabel()
@@ -212,6 +219,13 @@ class DataSelectionFileListGui(QWidget):
 
     def addFiles(self):
         self.addFileNames(ImageFileDialog(self).getSelectedPaths())
+
+    def addCollection(self):
+        dialog = StackFileSelectionWidget(self, grid_only=True)
+        if dialog.exec_() == QDialog.Accepted:
+            self.addFileNames(
+                [path for path in dialog.selectedFiles if Path(path).suffix.lower() in SUPPORTED_SUFFIXES]
+            )
 
     def _change_collection(self, change):
         self.parentApplet.busy = True

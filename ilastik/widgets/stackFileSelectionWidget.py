@@ -52,10 +52,19 @@ class StackFileSelectionWidget(QDialog):
         def __init__(self, message):
             super(StackFileSelectionWidget.DetermineStackError, self).__init__(message)
 
-    def __init__(self, parent, files: Optional[list[str]] = None):
+    def __init__(self, parent, files: Optional[list[str]] = None, *, grid_only: bool = False):
+        """With grid_only, select Grid and hide the stacking-axis controls."""
         super(StackFileSelectionWidget, self).__init__(parent)
 
+        self._grid_only = grid_only
         self._initUi()
+        if grid_only:
+            self.interpreteAsGrid.setChecked(True)
+            for button in (self.stackAcrossTButton, self.stackAcrossZButton, self.stackAcrossCButton):
+                button.hide()
+            self.label.setText("Interpret as:")
+            self.import_copy_info.hide()
+            self.setWindowTitle("Add image collection")
         self.selectedFiles: list[str] = []
         if files is None:
             files = []
@@ -197,7 +206,7 @@ class StackFileSelectionWidget(QDialog):
             msg += directory
             raise StackFileSelectionWidget.DetermineStackError(msg)
 
-        if len(all_filenames) == 1:
+        if len(all_filenames) == 1 and not self._grid_only:
             msg += "Cannot create stack: There is only one image file in the selected directory:\n"
             msg += directory + "\n"
             msg += "If your stack is contained in a single file (e.g. a multi-page tiff or "
@@ -291,7 +300,8 @@ class StackFileSelectionWidget(QDialog):
         pathComponents = PathComponents(fileNames[0])
 
         if (
-            (len(fileNames) == 1)
+            not self._grid_only
+            and (len(fileNames) == 1)
             and pathComponents.extension
             not in OpStreamingH5N5SequenceReaderM.H5EXTS + OpStreamingH5N5SequenceReaderM.N5EXTS
         ):
