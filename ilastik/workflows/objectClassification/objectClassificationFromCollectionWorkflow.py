@@ -26,6 +26,9 @@ from ilastik.applets.dataSelection.dataSelectionFileListApplet import DataSelect
 from ilastik.applets.objectClassificationCollection.objectClassficationCollectionApplet import (
     ObjectClassificationCollectionApplet,
 )
+from ilastik.applets.objectClassificationCollection.objectClassificationCollectionExportApplet import (
+    ObjectClassificationCollectionExportApplet,
+)
 from ilastik.applets.objectClassificationCollection.opObjectClassificationCollection import OpOCC
 from ilastik.applets.objectFeatureCollection.objectFeaturesCollectionApplet import ObjectFeatureCollectionApplet
 from ilastik.applets.objectFeatureCollection.opObjectFearturesCollection import OpObjectFeaturesCollection
@@ -70,9 +73,14 @@ class OcFromCollection(Workflow):
         self.objectClassificationApplet = ObjectClassificationCollectionApplet(
             workflow=self, projectFileGroupName="ObjectClassificationCollection"
         )
+        self.dataExportApplet = ObjectClassificationCollectionExportApplet(self)
+        self.dataExportApplet.topLevelOperator.WorkingDirectory.connect(
+            self.dataSelectionApplet.topLevelOperator.WorkingDirectory
+        )
         self._applets.append(self.dataSelectionApplet)
         self._applets.append(self.objectFeatureCollectionApplet)
         self._applets.append(self.objectClassificationApplet)
+        self._applets.append(self.dataExportApplet)
 
     def createDataSelectionApplet(self):
         data_instructions = "Add the individual object images to the file collection shown on the right."
@@ -103,30 +111,18 @@ class OcFromCollection(Workflow):
         opClassify.FileList.connect(opData.FileListTable)
         opClassify.Embedding.connect(opFeatures.Embedding)
 
+        opExport = self.dataExportApplet.topLevelOperator
+        opExport.FileList.connect(opData.FileListTable)
+        opExport.Predictions.connect(opClassify.Predictions)
+        opExport.LabelNames.connect(opClassify.LabelNames)
+
     def handleAppletStateUpdateRequested(self):
-        # op_data_selection = self.dataSelectionApplet.topLevelOperator
-        # input_ready = (
-        #     op_data_selection.FileListTable.ready()
-        #     and len(op_data_selection.FileListTable) > 0
-        #     and len(op_data_selection.FileListTable[0].value) > 0
-        #     and not self.dataSelectionApplet.busy
-        # )
-        # self._shell.setAppletEnabled(self.objectFeatureCollectionApplet, input_ready)
-
-        # op_features = self.objectFeatureCollectionApplet.topLevelOperator
-        # features_ready = op_features.Embedding.ready() and op_features.embedding_cache.hasCacheValue()
-
-        # op_oc = self.objectClassificationApplet.topLevelOperator
-        # live_update_active = not op_oc.FreezePredictions.value
-
-        # self._shell.setAppletEnabled(self.dataSelectionApplet, not live_update_active)
-        # self._shell.setAppletEnabled(self.objectFeatureCollectionApplet, input_ready and not live_update_active)
-        # self._shell.setAppletEnabled(self.objectClassificationApplet, input_ready and features_ready)
-
-        # busy = False
-        # busy |= self.dataSelectionApplet.busy
-        # busy |= self.objectFeatureCollectionApplet.busy
-        # busy |= self.objectClassificationApplet.busy
-        # self._shell.enableProjectChanges(not busy)
-        # TODO: Need to make this work ;)
-        pass
+        # Keep the collection and classifier stable while preview/export runs.
+        for applet in self.applets[:-1]:
+            self._shell.setAppletEnabled(applet, not self.dataExportApplet.busy)
+        upstream_busy = any(applet.busy for applet in self.applets[:-1])
+        self._shell.setAppletEnabled(
+            self.dataExportApplet,
+            self.dataExportApplet.topLevelOperator.FileList.ready() and not upstream_busy,
+        )
+        self._shell.enableProjectChanges(not any(applet.busy for applet in self.applets))

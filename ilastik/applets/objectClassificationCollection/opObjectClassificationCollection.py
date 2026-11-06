@@ -742,6 +742,7 @@ class OpOCC(Operator):
     GridLabels = OutputSlot()
 
     CachedPredictions = OutputSlot[PredictionTable]()
+    Predictions = OutputSlot[PredictionTable]()  # For export only - bypasses cache
     GridPredictions = OutputSlot()
 
     Eraser = OutputSlot()
@@ -860,6 +861,7 @@ class OpOCC(Operator):
         self.op_predict = OpObjectCollectionPredict(
             parent=self, Features=self.op_select_embedding.Output, Classifier=self.op_select_classifier.Output
         )
+        self.Predictions.connect(self.op_predict.Predictions)
         self.prediction_cache = OpValueCache[PredictionTable](parent=self)
         self.prediction_cache.fixAtCurrent.connect(self.FreezePredictions)
         self.prediction_cache.Input.connect(self.op_predict.Predictions)
