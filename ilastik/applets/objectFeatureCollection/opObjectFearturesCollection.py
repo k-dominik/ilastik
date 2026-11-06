@@ -82,6 +82,7 @@ class OpEmbedding(Operator):
 
     def propagateDirty(self, slot, subindex, roi):
         self._embedding = {}
+        self.Embedding.setDirty(())
 
 
 class OpObjectFeaturesCollection(Operator):

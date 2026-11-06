@@ -62,6 +62,7 @@ class OcFromCollection(Workflow):
         super().__init__(shell, headless, workflow_cmdline_args, project_creation_args, graph=graph, *args, **kwargs)
         self.stored_classifier = None
         self._applets: list[Applet] = []
+        self._state_update_subscriptions = []
         self._workflow_cmdline_args = workflow_cmdline_args
 
         self.dataSelectionApplet = self.createDataSelectionApplet()
@@ -81,6 +82,30 @@ class OcFromCollection(Workflow):
         self._applets.append(self.objectFeatureCollectionApplet)
         self._applets.append(self.objectClassificationApplet)
         self._applets.append(self.dataExportApplet)
+
+    def _after_init(self):
+        super()._after_init()
+        opFeatures = self.objectFeatureCollectionApplet.topLevelOperator
+        opClassify = self.objectClassificationApplet.topLevelOperator
+        # Observe both invalidation and completed computation/restoration of caches.
+        # Readiness alone only says that a value can be requested.
+        for slot in (
+            self.dataExportApplet.topLevelOperator.FileList,
+            opFeatures.embedding_cache.Output,
+            opClassify.classifier_cache_original_embedding.Output,
+            opClassify.classifier_cache_adapted_embedding.Output,
+        ):
+            for notify in (slot.notifyReady, slot.notifyUnready, slot.notifyDirty, slot.notifyValueChanged):
+                self._state_update_subscriptions.append(notify(self._request_applet_state_update, defer=True))
+
+    def _request_applet_state_update(self, *args):
+        self.handleAppletStateUpdateRequested()
+
+    def cleanUp(self):
+        for unsubscribe in self._state_update_subscriptions:
+            unsubscribe()
+        self._state_update_subscriptions.clear()
+        super().cleanUp()
 
     def createDataSelectionApplet(self):
         data_instructions = "Add the individual object images to the file collection shown on the right."
@@ -117,12 +142,39 @@ class OcFromCollection(Workflow):
         opExport.LabelNames.connect(opClassify.LabelNames)
 
     def handleAppletStateUpdateRequested(self):
-        # Keep the collection and classifier stable while preview/export runs.
-        for applet in self.applets[:-1]:
-            self._shell.setAppletEnabled(applet, not self.dataExportApplet.busy)
-        upstream_busy = any(applet.busy for applet in self.applets[:-1])
+        files = self.dataExportApplet.topLevelOperator.FileList
+        input_ready = files.ready() and bool(files.value)
+
+        feature_cache = self.objectFeatureCollectionApplet.topLevelOperator.embedding_cache
+        features_ready = input_ready and feature_cache.Output.ready() and feature_cache.hasCacheValue()
+
+        opClassify = self.objectClassificationApplet.topLevelOperator
+        classifier_ready = features_ready and any(
+            cache.Output.ready() and cache.hasCacheValue()
+            for cache in (
+                opClassify.classifier_cache_original_embedding,
+                opClassify.classifier_cache_adapted_embedding,
+            )
+        )
+
+        data_busy = self.dataSelectionApplet.busy
+        features_busy = self.objectFeatureCollectionApplet.busy
+        classification_busy = self.objectClassificationApplet.busy
+        export_busy = self.dataExportApplet.busy
+
+        self._shell.setAppletEnabled(
+            self.dataSelectionApplet, not (features_busy or classification_busy or export_busy)
+        )
+        self._shell.setAppletEnabled(
+            self.objectFeatureCollectionApplet,
+            input_ready and not (data_busy or classification_busy or export_busy),
+        )
+        self._shell.setAppletEnabled(
+            self.objectClassificationApplet,
+            features_ready and not (data_busy or features_busy or export_busy),
+        )
         self._shell.setAppletEnabled(
             self.dataExportApplet,
-            self.dataExportApplet.topLevelOperator.FileList.ready() and not upstream_busy,
+            classifier_ready and not (data_busy or features_busy or classification_busy),
         )
-        self._shell.enableProjectChanges(not any(applet.busy for applet in self.applets))
+        self._shell.enableProjectChanges(not (data_busy or features_busy or classification_busy or export_busy))

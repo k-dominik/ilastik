@@ -64,14 +64,23 @@ class ObjectFeatureCollectionGui(LayerViewerGui[OpObjectFeaturesCollection]):
         mainOperator = self.topLevelOperatorView
 
         def _cal_embedding(*args, **kwargs):
+            if self.parentApplet.busy:
+                return
+
             class _CalcThread(QThread):
 
                 def run(self):
                     print(f"_cal_embedding {args=} {kwargs=}")
                     _ = mainOperator.Embedding[()].wait()
 
+            def finished():
+                self.parentApplet.busy = False
+                self.parentApplet.appletStateUpdateRequested()
+
             t = _CalcThread(parent=self)
-            t.finished.connect(self.parentApplet.appletStateUpdateRequested)
+            t.finished.connect(finished)
+            self.parentApplet.busy = True
+            self.parentApplet.appletStateUpdateRequested()
             t.start()
 
         layout = QVBoxLayout()
