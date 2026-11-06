@@ -139,6 +139,7 @@ class SelectionViewBox(pyqtgraph.ViewBox):
 class ScatterWidget(QWidget):
     brush_color = "#AAAAAA"
     umapRequested = Signal()
+    recolorRequested = Signal()
 
     def __init__(self, tlo: "OpOCC", parent=None):
         super().__init__(parent)
@@ -154,8 +155,10 @@ class ScatterWidget(QWidget):
         self._last_flat_indices = None
         self._embeddings = {}
         self._umap: numpy.ndarray | None = None
+        self._umap_source: EmbeddingSource | None = None
         self._umap_request_id = 0
         self.umapRequested.connect(self._request_umap_data)
+        self.recolorRequested.connect(self._recolor)
 
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 2, 0, 2)
@@ -183,6 +186,7 @@ class ScatterWidget(QWidget):
 
         self._tlo.AnnotationsTable.notifyDirty(self._recolor)
         self._tlo.CachedPredictions.notifyDirty(self._recolor)
+        self._tlo.CachedPredictions.notifyValueChanged(lambda *args: self.recolorRequested.emit())
         self._tlo.PmapColors.notifyDirty(self._recolor)
         self._tlo.LabelColors.notifyDirty(self._recolor)
         self._tlo.SelectEmbeddingSource.notifyDirty(lambda *args: self.umapRequested.emit())
@@ -205,6 +209,8 @@ class ScatterWidget(QWidget):
         self._umap_request_id += 1
         request_id = self._umap_request_id
         source = tlo.SelectEmbeddingSource.value
+        if self.plot is not None:
+            self._recolor()
         umap_slot = tlo.Umap if source == EmbeddingSource.Original else tlo.AdaptedUmap
 
         class _CalcThread(QThread):
@@ -251,6 +257,7 @@ class ScatterWidget(QWidget):
         self.plot.addItem(self.scatter)
         self._graphics.addItem(self.plot)
         self._umap = umap_result
+        self._umap_source = EmbeddingSource(source)
         self._recolor()
         self.onSelection()
         self.viewBox.selectionFinished.connect(self.onSelection)
@@ -271,6 +278,20 @@ class ScatterWidget(QWidget):
 
     def _prediction_brushes(self) -> list[QBrush]:
         if self.scatter is None:
+            return []
+
+        source = self._tlo.SelectEmbeddingSource.value
+        if source != self._umap_source:
+            return []
+        classifier_cache = (
+            self._tlo.classifier_cache_original_embedding
+            if source == EmbeddingSource.Original
+            else self._tlo.classifier_cache_adapted_embedding
+        )
+        # Live reads retrain dirty classifiers; frozen tables must already be current.
+        if self._tlo.FreezePredictions.value and (
+            not classifier_cache.hasCacheValue() or not self._tlo.prediction_cache.hasCacheValue()
+        ):
             return []
 
         predictions: dict[ItemId, PredictionRow] = self._tlo.CachedPredictions.value
