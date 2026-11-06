@@ -117,7 +117,7 @@ class FileListTableModel(QAbstractTableModel):
         if column == FileListColumn.Location:
             return row.filename
         if column == FileListColumn.TaggedShape:
-            return ", ".join(f"{axis}: {size}" for axis, size in zip(row.axistags.keys(), row.shape))
+            return ", ".join(f"{axis}: {size}" for axis, size in zip(row.original_axistags.keys(), row.original_shape))
         if column == FileListColumn.Dtype:
             return row.dtype.name
         return None
